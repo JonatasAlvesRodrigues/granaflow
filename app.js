@@ -444,7 +444,7 @@ async function clearAllData(){
   try {
     const empty = emptyData();
     
-    // 1. Limpar na Nuvem (Supabase) - Forçando sobrescrita com dados vazios
+    // 1. Limpar na Nuvem (Supabase)
     if (state.user) {
       console.log("Limpando dados na nuvem...");
       const { error } = await sb.from("user_finance_data").upsert({
@@ -453,39 +453,23 @@ async function clearAllData(){
         updated_at: new Date().toISOString()
       }, { onConflict: "user_id" });
       
-      if (error) {
-        console.error("Erro Supabase:", error);
-        throw new Error("Não foi possível limpar os dados na nuvem. Verifique sua conexão.");
-      }
+      if (error) throw new Error("Erro ao limpar dados na nuvem: " + error.message);
     }
 
-    // 2. Limpeza "Nuclear" do LocalStorage
-    console.log("Limpando todo o armazenamento local...");
-    const keysToDelete = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (
-        key.startsWith("granaflow_") || 
-        key.startsWith("finanzen_") || 
-        key === KEYS.lastGoodData ||
-        key === KEYS.lastView
-      )) {
-        keysToDelete.push(key);
+    // 2. Limpeza Nuclear do LocalStorage
+    Object.keys(localStorage).forEach(key => {
+      if (key.includes("granaflow") || key.includes("finanzen")) {
+        localStorage.removeItem(key);
       }
-    }
-    keysToDelete.forEach(k => localStorage.removeItem(k));
+    });
 
-    // 3. Resetar estado em memória
+    // 3. Resetar estado e recarregar
     state.data = empty;
-    
-    // 4. Feedback e Recarregamento Forçado
-    // O recarregamento é a única forma de garantir que nenhum resíduo de memória restaure os dados
-    alert("✅ Sucesso! Todos os dados foram apagados permanentemente.\nO aplicativo será reiniciado agora.");
+    alert("✅ Dados apagados com sucesso! O sistema será reiniciado.");
     window.location.reload();
-
   } catch (e) {
     console.error("Erro na exclusão:", e);
-    alert("❌ Erro ao excluir dados: " + e.message);
+    toast("Erro ao excluir: " + e.message, true);
   } finally {
     setLoadingUI(false);
   }
@@ -501,20 +485,49 @@ function openView(view){
   $$(".nav-link").forEach(n=>n.classList.remove("active"));
   $$(".mobile-tab").forEach(n=>n.classList.remove("active"));
   
+  const viewTitleEl = $("viewTitle");
+  const viewSubtitleEl = $("viewSubtitle");
+  const topbarBrandEl = document.querySelector(".topbar-brand");
+
   if (navBtn) {
     navBtn.classList.add("active");
     const desktopBtn=document.querySelector(`.nav-link[data-view="${view}"]`); if(desktopBtn) desktopBtn.classList.add("active");
     const mobileBtn=document.querySelector(`.mobile-tab[data-view="${view}"]`); if(mobileBtn) mobileBtn.classList.add("active");
-    $("viewTitle").textContent = navBtn.textContent.trim();
+    if (viewTitleEl) viewTitleEl.textContent = navBtn.textContent.trim();
   } else {
-    $("viewTitle").textContent = subtitle(view);
+    if (viewTitleEl) viewTitleEl.textContent = subtitle(view);
+  }
+
+  // Ajuste para o mobile header discreto
+  if (topbarBrandEl) {
+    if (window.innerWidth <= 768) {
+      if (view === "dashboard") {
+        topbarBrandEl.style.display = "block";
+        if (viewTitleEl) viewTitleEl.style.display = "none";
+        if (viewSubtitleEl) viewSubtitleEl.style.display = "none";
+      } else {
+        topbarBrandEl.style.display = "none";
+        if (viewTitleEl) {
+          viewTitleEl.style.display = "block";
+          viewTitleEl.style.fontSize = "1.1rem"; // Título menor no mobile
+        }
+        if (viewSubtitleEl) viewSubtitleEl.style.display = "none";
+      }
+    } else {
+      topbarBrandEl.style.display = "none";
+      if (viewTitleEl) {
+        viewTitleEl.style.display = "block";
+        viewTitleEl.style.fontSize = "1.5rem";
+      }
+      if (viewSubtitleEl) viewSubtitleEl.style.display = "block";
+    }
   }
 
   $$(".view").forEach(x=>x.classList.add("hidden"));
   targetView.classList.remove("hidden");
   animateView(targetView);
   
-  $("viewSubtitle").textContent = subtitle(view);
+  if (viewSubtitleEl && window.innerWidth > 768) viewSubtitleEl.textContent = subtitle(view);
   const s=$("sidebar"); if(s) s.classList.remove("open");
   saveLastView(view);
   if(view==="insights") renderInsights();

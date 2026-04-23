@@ -21,12 +21,13 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
   </head>
-  <body>
-    <div class="bg-shape bg-shape-1"></div>
-    <div class="bg-shape bg-shape-2"></div>
+  <body class="dark">
+    <div class="loading-overlay">
+      <div class="spinner"></div>
+    </div>
 
     <main id="authScreen" class="auth-screen">
-      <section class="card auth-card">
+      <article class="auth-card card">
         <div class="brand">
           <img class="brand-logo" src="./frontend/logo-granaflow.png" alt="Logo GranaFlow" />
           <div>
@@ -35,35 +36,47 @@
           </div>
         </div>
 
-        <div class="tabs">
-          <button class="tab-btn active" type="button" onclick="setAuthTab('login')">Entrar</button>
-          <button class="tab-btn" type="button" onclick="setAuthTab('register')">Cadastrar</button>
-          <button class="tab-btn" type="button" onclick="setAuthTab('recover')">Recuperar</button>
+        <div class="auth-tabs">
+          <button class="auth-tab-btn active" data-auth-tab="login" type="button" onclick="setAuthTab('login')">Entrar</button>
+          <button class="auth-tab-btn" data-auth-tab="register" type="button" onclick="setAuthTab('register')">Cadastrar</button>
+          <button class="auth-tab-btn" data-auth-tab="recover" type="button" onclick="setAuthTab('recover')">Recuperar</button>
         </div>
 
         <form id="loginForm" class="auth-form" onsubmit="event.preventDefault(); window.handleLogin(event)">
-          <label>Email</label>
-          <input type="email" name="email" required />
-          <label>Senha</label>
-          <input type="password" name="password" required />
-          <button type="submit" class="btn btn-primary">Entrar</button>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" name="email" placeholder="seu@email.com" required />
+          </div>
+          <div class="field">
+            <label>Senha</label>
+            <input type="password" name="password" placeholder="••••••••" required />
+          </div>
+          <button type="submit" class="btn btn-primary">Entrar no GranaFlow</button>
         </form>
 
         <form id="registerForm" class="auth-form hidden" onsubmit="event.preventDefault(); window.handleRegister(event)">
-          <label>Nome</label>
-          <input type="text" name="name" required />
-          <label>Email</label>
-          <input type="email" name="email" required />
-          <label>Senha (mín. 6)</label>
-          <input type="password" name="password" minlength="6" required />
+          <div class="field">
+            <label>Nome</label>
+            <input type="text" name="name" placeholder="Seu nome" required />
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" name="email" placeholder="seu@email.com" required />
+          </div>
+          <div class="field">
+            <label>Senha (mín. 6)</label>
+            <input type="password" name="password" minlength="6" placeholder="••••••••" required />
+          </div>
           <button type="submit" class="btn btn-primary">Criar conta</button>
         </form>
 
         <form id="recoverForm" class="auth-form hidden" onsubmit="event.preventDefault(); window.handleRecover(event)">
-          <label>Email</label>
-          <input type="email" name="email" required />
-          <button type="submit" class="btn btn-primary">Enviar link</button>
-          <small>Um link de recuperação será enviado para seu email.</small>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" name="email" placeholder="seu@email.com" required />
+          </div>
+          <button type="submit" class="btn btn-primary">Enviar link de recuperação</button>
+          <p class="section-note">Um link de recuperação será enviado para seu email.</p>
         </form>
 
         <form id="resetForm" class="auth-form hidden">
@@ -82,7 +95,6 @@
       <aside id="sidebar" class="sidebar">
         <div class="sidebar-top">
           <div class="brand compact">
-            <img class="brand-logo small" src="./frontend/logo-granaflow.png" alt="Logo GranaFlow" />
             <div>
               <h2>GranaFlow</h2>
               <p id="userLabel"></p>
@@ -91,29 +103,30 @@
           <button id="closeMenu" class="icon-btn mobile-only" onclick="document.getElementById('sidebar').classList.remove('open')"><i data-lucide="x"></i></button>
         </div>
         <nav>
-          <button class="nav-link active" type="button" onclick="openView('dashboard')"><i data-lucide="layout-dashboard"></i>Dashboard</button>
-          <button class="nav-link" type="button" onclick="openView('transactions')"><i data-lucide="plus-circle"></i>Nova Transação</button>
-          <button class="nav-link" type="button" onclick="openView('statement')"><i data-lucide="file-text"></i>Extrato</button>
-          <button class="nav-link" type="button" onclick="openView('categories')"><i data-lucide="tags"></i>Categorias</button>
-          <button class="nav-link" type="button" onclick="openView('cards')"><i data-lucide="credit-card"></i>Cartões</button>
-          <button class="nav-link" type="button" onclick="openView('recurring')"><i data-lucide="refresh-cw"></i>Recorrentes</button>
-          <button class="nav-link" type="button" onclick="openView('goals')"><i data-lucide="target"></i>Metas</button>
-          <button class="nav-link" type="button" onclick="openView('reports')"><i data-lucide="file-chart-column"></i>Relatórios</button>
-          <button class="nav-link" type="button" onclick="openView('insights')"><i data-lucide="sparkles"></i>Insights</button>
-          <button class="nav-link" type="button" onclick="openView('settings')"><i data-lucide="settings"></i>Configurações</button>
+          <button class="nav-link active" data-view="dashboard" type="button" onclick="openView('dashboard')"><i data-lucide="layout-dashboard"></i>Dashboard</button>
+          <button class="nav-link" data-view="transactions" type="button" onclick="openView('transactions')"><i data-lucide="plus-circle"></i>Nova Transação</button>
+          <button class="nav-link" data-view="statement" type="button" onclick="openView('statement')"><i data-lucide="file-text"></i>Extrato</button>
+          <button class="nav-link" data-view="categories" type="button" onclick="openView('categories')"><i data-lucide="tags"></i>Categorias</button>
+          <button class="nav-link" data-view="cards" type="button" onclick="openView('cards')"><i data-lucide="credit-card"></i>Cartões</button>
+          <button class="nav-link" data-view="recurring" type="button" onclick="openView('recurring')"><i data-lucide="calendar-days"></i>Recorrentes</button>
+          <button class="nav-link" data-view="goals" type="button" onclick="openView('goals')"><i data-lucide="target"></i>Metas</button>
+          <button class="nav-link" data-view="reports" type="button" onclick="openView('reports')"><i data-lucide="bar-chart-3"></i>Relatórios</button>
+          <button class="nav-link" data-view="insights" type="button" onclick="openView('insights')"><i data-lucide="sparkles"></i>Insights</button>
+          <button class="nav-link" data-view="settings" type="button" onclick="openView('settings')"><i data-lucide="settings"></i>Ajustes</button>
         </nav>
       </aside>
 
       <div class="content">
         <header class="topbar card">
           <button id="openMenu" class="icon-btn mobile-only" type="button" onclick="document.getElementById('sidebar').classList.add('open')"><i data-lucide="menu"></i></button>
+          <div class="topbar-brand mobile-only">GranaFlow</div>
           <div class="topbar-text">
             <h3 id="viewTitle">Dashboard</h3>
             <p id="viewSubtitle">Visão geral das finanças</p>
           </div>
           <div class="topbar-actions">
-            <button id="topbarSettingsBtn" class="btn btn-ghost" type="button" onclick="openView('settings')"><i data-lucide="settings"></i>Ajustes</button>
-            <button id="logoutBtn" class="btn btn-danger" type="button" onclick="logout()">Sair</button>
+            <button id="topbarSettingsBtn" class="btn btn-ghost desktop-only" type="button" onclick="openView('settings')"><i data-lucide="settings"></i>Ajustes</button>
+            <button id="logoutBtn" class="btn btn-danger desktop-only" type="button" onclick="logout()">Sair</button>
           </div>
         </header>
 
@@ -132,9 +145,6 @@
         </section>
 
         <section id="dashboardView" class="view">
-          <div class="brand-mobile mobile-only">
-            <h1>GranaFlow</h1>
-          </div>
           <!-- AI Input Header -->
           <div class="ai-input-wrapper">
             <div class="ai-input-container">
@@ -463,11 +473,9 @@
         </section>
       </div>
       <nav class="mobile-dock mobile-only">
-        <button class="mobile-tab active" type="button" onclick="openView('dashboard')"><i data-lucide="layout-dashboard"></i><span>Home</span></button>
-        <button class="mobile-tab" type="button" onclick="openView('transactions')"><i data-lucide="plus-circle"></i><span>Novo</span></button>
-        <button class="mobile-tab" type="button" onclick="openView('statement')"><i data-lucide="file-text"></i><span>Extrato</span></button>
-        <button class="mobile-tab" type="button" onclick="openView('cards')"><i data-lucide="credit-card"></i><span>Pagar</span></button>
-        <button class="mobile-tab" type="button" onclick="openView('settings')"><i data-lucide="settings"></i><span>Ajustes</span></button>
+        <button class="mobile-tab active" data-view="dashboard" type="button" onclick="openView('dashboard')"><i data-lucide="layout-dashboard"></i><span>Home</span></button>
+        <button class="mobile-tab" data-view="transactions" type="button" onclick="openView('transactions')"><i data-lucide="plus-circle"></i><span>Novo</span></button>
+        <button class="mobile-tab" data-view="statement" type="button" onclick="openView('statement')"><i data-lucide="file-text"></i><span>Extrato</span></button>
       </nav>
 
       <button id="fabQuickAdd" class="fab" onclick="quickAddExpense()" aria-label="Adicionar Gasto">
