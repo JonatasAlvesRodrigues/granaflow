@@ -54,6 +54,10 @@ self.addEventListener("fetch", event => {
         const copy = response.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
         return response;
+      }).catch(async () => {
+        const fallback = await caches.match(request);
+        if (fallback) return fallback;
+        return new Response("", { status: 503, statusText: "Offline" });
       });
     })
   );

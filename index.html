@@ -6,8 +6,9 @@
     <meta name="theme-color" content="#0f766e" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="./logo-granaflow.png" />
+    <link rel="manifest" href="./frontend/manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="./frontend/logo-granaflow.png" />
+    <link rel="apple-touch-icon" href="./frontend/logo-granaflow.png" />
     <title>GranaFlow | Controle Financeiro</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -15,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./frontend/styles.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -27,7 +28,7 @@
     <main id="authScreen" class="auth-screen">
       <section class="card auth-card">
         <div class="brand">
-          <img class="brand-logo" src="./logo-granaflow.png" alt="Logo GranaFlow" />
+          <img class="brand-logo" src="./frontend/logo-granaflow.png" alt="Logo GranaFlow" />
           <div>
             <h1>GranaFlow</h1>
             <p>Controle financeiro pessoal inteligente</p>
@@ -35,12 +36,12 @@
         </div>
 
         <div class="tabs">
-          <button class="tab-btn active" data-auth-tab="login">Entrar</button>
-          <button class="tab-btn" data-auth-tab="register">Cadastrar</button>
-          <button class="tab-btn" data-auth-tab="recover">Recuperar senha</button>
+          <button class="tab-btn active" type="button" onclick="setAuthTab('login')">Entrar</button>
+          <button class="tab-btn" type="button" onclick="setAuthTab('register')">Cadastrar</button>
+          <button class="tab-btn" type="button" onclick="setAuthTab('recover')">Recuperar</button>
         </div>
 
-        <form id="loginForm" class="auth-form">
+        <form id="loginForm" class="auth-form" onsubmit="event.preventDefault(); window.handleLogin(event)">
           <label>Email</label>
           <input type="email" name="email" required />
           <label>Senha</label>
@@ -48,7 +49,7 @@
           <button type="submit" class="btn btn-primary">Entrar</button>
         </form>
 
-        <form id="registerForm" class="auth-form hidden">
+        <form id="registerForm" class="auth-form hidden" onsubmit="event.preventDefault(); window.handleRegister(event)">
           <label>Nome</label>
           <input type="text" name="name" required />
           <label>Email</label>
@@ -58,7 +59,7 @@
           <button type="submit" class="btn btn-primary">Criar conta</button>
         </form>
 
-        <form id="recoverForm" class="auth-form hidden">
+        <form id="recoverForm" class="auth-form hidden" onsubmit="event.preventDefault(); window.handleRecover(event)">
           <label>Email</label>
           <input type="email" name="email" required />
           <button type="submit" class="btn btn-primary">Enviar link</button>
@@ -81,37 +82,38 @@
       <aside id="sidebar" class="sidebar">
         <div class="sidebar-top">
           <div class="brand compact">
-            <img class="brand-logo small" src="./logo-granaflow.png" alt="Logo GranaFlow" />
+            <img class="brand-logo small" src="./frontend/logo-granaflow.png" alt="Logo GranaFlow" />
             <div>
               <h2>GranaFlow</h2>
               <p id="userLabel"></p>
             </div>
           </div>
-          <button id="closeMenu" class="icon-btn mobile-only"><i data-lucide="x"></i></button>
+          <button id="closeMenu" class="icon-btn mobile-only" onclick="document.getElementById('sidebar').classList.remove('open')"><i data-lucide="x"></i></button>
         </div>
         <nav>
-          <button class="nav-link active" data-view="dashboard"><i data-lucide="layout-dashboard"></i>Dashboard</button>
-          <button class="nav-link" data-view="transactions"><i data-lucide="arrow-right-left"></i>Transações</button>
-          <button class="nav-link" data-view="categories"><i data-lucide="tags"></i>Categorias</button>
-          <button class="nav-link" data-view="cards"><i data-lucide="credit-card"></i>Cartões</button>
-          <button class="nav-link" data-view="recurring"><i data-lucide="refresh-cw"></i>Recorrentes</button>
-          <button class="nav-link" data-view="goals"><i data-lucide="target"></i>Metas</button>
-          <button class="nav-link" data-view="reports"><i data-lucide="file-chart-column"></i>Relatórios</button>
-          <button class="nav-link" data-view="insights"><i data-lucide="sparkles"></i>Insights</button>
-          <button class="nav-link" data-view="settings"><i data-lucide="settings"></i>Configurações</button>
+          <button class="nav-link active" type="button" onclick="openView('dashboard')"><i data-lucide="layout-dashboard"></i>Dashboard</button>
+          <button class="nav-link" type="button" onclick="openView('transactions')"><i data-lucide="plus-circle"></i>Nova Transação</button>
+          <button class="nav-link" type="button" onclick="openView('statement')"><i data-lucide="file-text"></i>Extrato</button>
+          <button class="nav-link" type="button" onclick="openView('categories')"><i data-lucide="tags"></i>Categorias</button>
+          <button class="nav-link" type="button" onclick="openView('cards')"><i data-lucide="credit-card"></i>Cartões</button>
+          <button class="nav-link" type="button" onclick="openView('recurring')"><i data-lucide="refresh-cw"></i>Recorrentes</button>
+          <button class="nav-link" type="button" onclick="openView('goals')"><i data-lucide="target"></i>Metas</button>
+          <button class="nav-link" type="button" onclick="openView('reports')"><i data-lucide="file-chart-column"></i>Relatórios</button>
+          <button class="nav-link" type="button" onclick="openView('insights')"><i data-lucide="sparkles"></i>Insights</button>
+          <button class="nav-link" type="button" onclick="openView('settings')"><i data-lucide="settings"></i>Configurações</button>
         </nav>
       </aside>
 
       <div class="content">
         <header class="topbar card">
-          <button id="openMenu" class="icon-btn mobile-only"><i data-lucide="menu"></i></button>
+          <button id="openMenu" class="icon-btn mobile-only" type="button" onclick="document.getElementById('sidebar').classList.add('open')"><i data-lucide="menu"></i></button>
           <div class="topbar-text">
             <h3 id="viewTitle">Dashboard</h3>
             <p id="viewSubtitle">Visão geral das finanças</p>
           </div>
           <div class="topbar-actions">
-            <button id="topbarSettingsBtn" class="btn btn-ghost" type="button"><i data-lucide="settings"></i>Configurações</button>
-            <button id="logoutBtn" class="btn btn-danger">Sair</button>
+            <button id="topbarSettingsBtn" class="btn btn-ghost" type="button" onclick="openView('settings')"><i data-lucide="settings"></i>Ajustes</button>
+            <button id="logoutBtn" class="btn btn-danger" type="button" onclick="logout()">Sair</button>
           </div>
         </header>
 
@@ -123,52 +125,47 @@
             <h4 id="onboardingTitle">Configure seu salário automático</h4>
             <p id="onboardingText" class="onboarding-text"></p>
             <div class="onboarding-actions">
-              <button id="onboardingSkip" class="btn btn-ghost" type="button">Pular</button>
-              <button id="onboardingNext" class="btn btn-primary" type="button">Próximo</button>
+              <button class="btn btn-ghost" type="button" onclick="finishOnboarding(false)">Pular</button>
+              <button class="btn btn-primary" type="button" onclick="nextOnboardingStep()">Próximo</button>
             </div>
           </article>
         </section>
 
         <section id="dashboardView" class="view">
-          <article class="card overview-hero">
+          <div class="brand-mobile mobile-only">
+            <h1>GranaFlow</h1>
+          </div>
+          <!-- AI Input Header -->
+          <div class="ai-input-wrapper">
+            <div class="ai-input-container">
+              <i data-lucide="sparkles" class="ai-icon"></i>
+              <input type="text" id="aiQuickInput" placeholder="O que você gastou hoje? (Ex: 20 gasolina)" onkeypress="if(event.key === 'Enter') handleAiInput(this.value)">
+              <button class="ai-submit-btn" onclick="handleAiInput(document.getElementById('aiQuickInput').value)">
+                <i data-lucide="arrow-right"></i>
+              </button>
+            </div>
+          </div>
+
+          <article class="card overview-hero glass-card">
             <div class="overview-hero-content">
-              <p class="overview-kicker">Visão Geral Inteligente</p>
-              <h2>Seu dinheiro com clareza, foco e controle.</h2>
-              <p>Monitore seu saldo, compare entradas e saídas e tome decisões melhores todos os dias.</p>
+              <p class="overview-kicker">Saldo Disponível</p>
+              <h2 id="heroBalance">R$ 0,00</h2>
               <div class="overview-pill-row">
-                <span class="overview-pill">Saldo: <strong id="heroBalance">R$ 0,00</strong></span>
-                <span class="overview-pill income">Receitas: <strong id="heroIncome">R$ 0,00</strong></span>
-                <span class="overview-pill expense">Despesas: <strong id="heroExpense">R$ 0,00</strong></span>
-                <span class="overview-pill alert">Status: <strong id="heroHealth">Neutro</strong></span>
+                <span class="overview-pill income"><i data-lucide="arrow-up-right"></i> <strong id="heroIncome">R$ 0,00</strong></span>
+                <span class="overview-pill expense"><i data-lucide="arrow-down-left"></i> <strong id="heroExpense">R$ 0,00</strong></span>
+                <span class="overview-pill alert"><i data-lucide="activity"></i> <strong id="heroHealth">Neutro</strong></span>
               </div>
             </div>
-            <div class="overview-hero-decoration" aria-hidden="true"></div>
           </article>
-          <article class="card quick-actions">
-            <div class="quick-actions-title">
-              <h4>Acesso Rápido</h4>
-              <p>Registre gastos em segundos</p>
-            </div>
-            <div class="quick-actions-row">
-              <button id="quickAddExpense" class="btn btn-primary quick-btn"><i data-lucide="plus"></i>Adicionar Gasto</button>
-            </div>
-          </article>
+
           <div class="metrics-grid">
-            <article class="metric card metric-balance">
-              <div class="metric-head"><span>Saldo Total</span><i data-lucide="wallet"></i></div>
-              <h4 id="metricBalance">R$ 0,00</h4>
-            </article>
-            <article class="metric card metric-income">
-              <div class="metric-head"><span>Receitas</span><i data-lucide="trending-up"></i></div>
-              <h4 id="metricIncome">R$ 0,00</h4>
-            </article>
-            <article class="metric card metric-expense">
-              <div class="metric-head"><span>Despesas</span><i data-lucide="trending-down"></i></div>
-              <h4 id="metricExpense">R$ 0,00</h4>
-            </article>
-            <article class="metric card metric-alerts">
-              <div class="metric-head"><span>Alertas</span><i data-lucide="bell-ring"></i></div>
+            <article class="metric card">
+              <div class="metric-head"><span>Alertas</span><i data-lucide="bell"></i></div>
               <h4 id="metricAlerts">0</h4>
+            </article>
+            <article class="metric card">
+              <div class="metric-head"><span>Metas</span><i data-lucide="target"></i></div>
+              <h4 id="metricGoalsCount">0</h4>
             </article>
           </div>
           <div class="grid-2">
@@ -177,14 +174,22 @@
               <div class="chart-box"><canvas id="categoryChart"></canvas></div>
             </article>
             <article class="card">
+              <h4>Orçamentos Mensais</h4>
+              <div id="budgetProgressList" class="budget-progress-list">
+                <p class="message">Defina tetos nas categorias para acompanhar aqui.</p>
+              </div>
+            </article>
+          </div>
+          <div class="grid-2">
+            <article class="card">
               <h4>Evolução mensal</h4>
               <div class="chart-box"><canvas id="trendChart"></canvas></div>
             </article>
+            <article class="card">
+              <h4>Panorama geral (pizza)</h4>
+              <div class="chart-box chart-box-sm"><canvas id="overallPieChart"></canvas></div>
+            </article>
           </div>
-          <article class="card">
-            <h4>Panorama geral (pizza)</h4>
-            <div class="chart-box chart-box-sm"><canvas id="overallPieChart"></canvas></div>
-          </article>
           <article class="card">
             <h4>Últimas transações</h4>
             <div id="latestTransactions"></div>
@@ -192,68 +197,80 @@
         </section>
 
         <section id="transactionsView" class="view hidden">
-          <div class="grid-2">
-            <article class="card">
-              <h4>Nova transação</h4>
-              <p class="section-note">Registro rápido com os campos essenciais.</p>
-              <form id="transactionForm" class="form-grid transaction-form-pro">
-                <input type="hidden" name="id" />
-                <div class="field">
-                  <label for="txType">Tipo</label>
-                  <input type="hidden" id="txType" name="type" value="income" required />
-                  <div class="type-toggle" role="radiogroup" aria-label="Tipo da transação">
-                    <button class="type-toggle-btn active" type="button" data-tx-type="income" aria-pressed="true"><i data-lucide="plus-circle"></i><span>Entrada</span></button>
-                    <button class="type-toggle-btn" type="button" data-tx-type="expense" aria-pressed="false"><i data-lucide="minus-circle"></i><span>Saída</span></button>
-                  </div>
-                </div>
-                <div class="field">
-                  <label for="txAmount">Valor</label>
-                  <input id="txAmount" class="amount-input" type="number" step="0.01" min="0.01" name="amount" placeholder="0,00" required />
-                </div>
-                <div class="field">
-                  <label for="paymentMethod">Forma de pagamento</label>
-                  <input type="hidden" name="paymentMethod" id="paymentMethod" value="cash" required />
-                  <div class="payment-toggle" role="radiogroup" aria-label="Forma de pagamento">
-                    <button class="payment-toggle-btn active" type="button" data-payment-method="cash" aria-pressed="true"><i data-lucide="wallet"></i><span>Dinheiro</span></button>
-                    <button class="payment-toggle-btn" type="button" data-payment-method="pix" aria-pressed="false"><i data-lucide="qr-code"></i><span>PIX</span></button>
-                    <button class="payment-toggle-btn" type="button" data-payment-method="debit" aria-pressed="false"><i data-lucide="credit-card"></i><span>Débito</span></button>
-                    <button class="payment-toggle-btn" type="button" data-payment-method="credit" aria-pressed="false"><i data-lucide="badge-dollar-sign"></i><span>Crédito</span></button>
-                  </div>
-                </div>
-                <div class="field" id="transactionCategoryField">
-                  <label for="transactionCategory">Categoria</label>
-                  <select name="categoryId" id="transactionCategory"></select>
-                </div>
-                <div class="field">
-                  <label for="txDate">Data</label>
-                  <input id="txDate" type="date" name="date" required />
-                </div>
-                <div class="field">
-                  <label for="txDescription">Descrição</label>
-                  <input id="txDescription" type="text" name="description" placeholder="Ex: Uber para trabalho" />
-                </div>
-                <div id="transactionCreditFields" class="credit-extra hidden">
-                  <div class="field">
-                    <label for="installmentCount">Parcelas</label>
-                    <input type="number" min="1" max="24" name="installmentCount" id="installmentCount" value="1" placeholder="Parcelas" />
-                  </div>
-                </div>
-                <button class="btn btn-primary transaction-submit" type="submit">Salvar transação</button>
-              </form>
-            </article>
-            <article class="card" id="transactionFilterCard">
-              <h4>Filtros</h4>
-              <form id="transactionFilter" class="form-grid">
-                <select name="categoryId" id="filterCategory"></select>
-                <input type="date" name="startDate" />
-                <input type="date" name="endDate" />
-                <button class="btn btn-secondary" type="submit">Aplicar</button>
-                <button class="btn btn-ghost" type="button" id="clearTxFilter">Limpar</button>
-              </form>
-            </article>
-          </div>
           <article class="card">
-            <h4>Lista de transações</h4>
+            <h4>Nova transação</h4>
+            <p class="section-note">Registre suas entradas e saídas rapidamente.</p>
+            <form id="transactionForm" class="form-grid transaction-form-pro">
+              <input type="hidden" name="id" />
+              <div class="field">
+                <label for="txType">Tipo</label>
+                <input type="hidden" id="txType" name="type" value="income" required />
+                <div class="type-toggle" role="radiogroup" aria-label="Tipo da transação">
+                  <div class="type-toggle-btn active" data-tx-type="income" role="button" onclick="setTransactionType('income')" aria-pressed="true"><i data-lucide="plus-circle"></i><span>Entrada</span></div>
+                  <div class="type-toggle-btn" data-tx-type="expense" role="button" onclick="setTransactionType('expense')" aria-pressed="false"><i data-lucide="minus-circle"></i><span>Saída</span></div>
+                </div>
+              </div>
+              <div class="field">
+                <label for="txAmount">Valor</label>
+                <input id="txAmount" class="amount-input" type="number" step="0.01" min="0.01" name="amount" placeholder="0,00" required />
+              </div>
+              <div class="field">
+                <label for="paymentMethod">Forma de pagamento</label>
+                <input type="hidden" name="paymentMethod" id="paymentMethod" value="cash" required />
+                <div class="payment-toggle" role="radiogroup" aria-label="Forma de pagamento">
+                  <div class="payment-toggle-btn active" role="button" onclick="setTransactionPaymentMethod('cash')" aria-pressed="true"><i data-lucide="wallet"></i><span>Dinheiro</span></div>
+                  <div class="payment-toggle-btn" role="button" onclick="setTransactionPaymentMethod('pix')" aria-pressed="false"><i data-lucide="qr-code"></i><span>PIX</span></div>
+                  <div class="payment-toggle-btn" role="button" onclick="setTransactionPaymentMethod('debit')" aria-pressed="false"><i data-lucide="credit-card"></i><span>Débito</span></div>
+                  <div class="payment-toggle-btn" role="button" onclick="setTransactionPaymentMethod('credit')" aria-pressed="false"><i data-lucide="badge-dollar-sign"></i><span>Crédito</span></div>
+                </div>
+              </div>
+              <div class="field" id="transactionCategoryField">
+                <label for="transactionCategory">Categoria</label>
+                <select name="categoryId" id="transactionCategory"></select>
+              </div>
+              <div class="field">
+                <label for="txDate">Data</label>
+                <input id="txDate" type="date" name="date" required />
+              </div>
+              <div class="field">
+                <label for="txDescription">Descrição</label>
+                <input id="txDescription" type="text" name="description" placeholder="Ex: Uber para trabalho" />
+              </div>
+              <div id="transactionCreditFields" class="credit-extra hidden">
+                <div class="field">
+                  <label for="installmentCount">Parcelas</label>
+                  <input type="number" min="1" max="24" name="installmentCount" id="installmentCount" value="1" placeholder="Parcelas" />
+                </div>
+              </div>
+              <button class="btn btn-primary transaction-submit" type="submit">Salvar transação</button>
+            </form>
+          </article>
+        </section>
+
+        <section id="statementView" class="view hidden">
+          <article class="card" id="transactionFilterCard">
+            <h4>Filtrar Extrato</h4>
+            <form id="transactionFilter" class="form-grid" onsubmit="event.preventDefault(); filterTransactions(event)">
+              <div class="field">
+                <label>Categoria</label>
+                <select name="categoryId" id="filterCategory"></select>
+              </div>
+              <div class="field">
+                <label>Início</label>
+                <input type="date" name="startDate" />
+              </div>
+              <div class="field">
+                <label>Fim</label>
+                <input type="date" name="endDate" />
+              </div>
+              <div class="field" style="display: flex; align-items: flex-end; gap: 0.5rem;">
+                <button class="btn btn-primary" style="flex: 1" type="submit">Aplicar</button>
+                <button class="btn btn-ghost" style="flex: 1" type="button" onclick="clearTransactionFilters()">Limpar</button>
+              </div>
+            </form>
+          </article>
+          <article class="card">
+            <h4>Movimentações</h4>
             <div id="transactionList"></div>
           </article>
         </section>
@@ -261,11 +278,12 @@
         <section id="categoriesView" class="view hidden">
           <article class="card">
             <h4>Categoria</h4>
-            <form id="categoryForm" class="inline-form">
+            <form id="categoryForm" class="inline-form" onsubmit="event.preventDefault(); saveCategory(event)">
               <input type="hidden" name="id" />
               <input type="text" name="name" placeholder="Nome" required />
               <input type="color" name="color" value="#3b82f6" />
               <input type="text" name="icon" placeholder="Ícone (lucide)" value="circle" />
+              <input type="number" step="0.01" name="budget" placeholder="Teto mensal (opcional)" />
               <button class="btn btn-primary" type="submit">Salvar</button>
             </form>
           </article>
@@ -297,7 +315,7 @@
           </article>
           <article class="card">
             <h4>Faturas</h4>
-            <form id="invoiceFilter" class="inline-form">
+            <form id="invoiceFilter" class="inline-form" onsubmit="event.preventDefault(); renderInvoices(event)">
               <input type="month" name="month" />
               <button class="btn btn-ghost" type="submit">Buscar</button>
             </form>
@@ -308,7 +326,7 @@
         <section id="recurringView" class="view hidden">
           <article class="card">
             <h4>Lançamento recorrente</h4>
-            <form id="recurringForm" class="inline-form">
+            <form id="recurringForm" class="inline-form" onsubmit="event.preventDefault(); saveRecurring(event)">
               <input type="hidden" name="id" />
               <select name="type"><option value="income">Entrada</option><option value="expense">Saída</option></select>
               <input type="number" step="0.01" min="0.01" name="amount" placeholder="Valor" required />
@@ -318,7 +336,7 @@
               <input type="text" name="description" placeholder="Descrição" />
               <button class="btn btn-primary" type="submit">Salvar</button>
             </form>
-            <button id="runRecurring" class="btn btn-secondary">Processar lançamentos vencidos</button>
+            <button class="btn btn-secondary" type="button" onclick="runRecurringDue(false)">Processar lançamentos vencidos</button>
           </article>
           <article class="card"><div id="recurringList"></div></article>
         </section>
@@ -329,7 +347,7 @@
               <h4>Metas Financeiras</h4>
               <p>Defina objetivo, prazo e acompanhe o progresso em tempo real.</p>
             </div>
-            <form id="goalForm" class="goals-form">
+            <form id="goalForm" class="goals-form" onsubmit="event.preventDefault(); saveGoal(event)">
               <input type="hidden" name="id" />
               <div class="field">
                 <label for="goalTargetAmount">Valor que quero alcançar</label>
@@ -366,14 +384,14 @@
               <p>Gere visão mensal, compare períodos e exporte seus dados.</p>
             </div>
             <div class="reports-grid">
-              <form id="reportForm" class="report-block">
+              <form id="reportForm" class="report-block" onsubmit="event.preventDefault(); generateMonthlyReport(event)">
                 <h5>Relatório mensal</h5>
                 <div class="inline-form">
                   <input type="month" name="month" required />
                   <button class="btn btn-primary" type="submit">Gerar mensal</button>
                 </div>
               </form>
-              <form id="compareForm" class="report-block">
+              <form id="compareForm" class="report-block" onsubmit="event.preventDefault(); compareMonths(event)">
                 <h5>Comparar meses</h5>
                 <div class="inline-form">
                   <input type="month" name="current" required />
@@ -384,8 +402,8 @@
               <div class="report-block">
                 <h5>Exportação</h5>
                 <div class="inline-form">
-                  <button id="exportCsv" class="btn btn-ghost" type="button">Exportar CSV</button>
-                  <button id="exportPdf" class="btn btn-ghost" type="button">Exportar PDF</button>
+                  <button class="btn btn-ghost" type="button" onclick="exportCsv()">Exportar CSV</button>
+                  <button class="btn btn-ghost" type="button" onclick="exportPdf()">Exportar PDF</button>
                 </div>
               </div>
             </div>
@@ -416,15 +434,15 @@
           <article class="card">
             <h4>Aparência e Acesso</h4>
             <div class="inline-form">
-              <button id="settingsThemeBtn" class="btn btn-ghost" type="button"><i data-lucide="moon"></i>Alternar tema</button>
-              <button id="settingsTutorialBtn" class="btn btn-ghost" type="button"><i data-lucide="graduation-cap"></i>Reabrir tutorial</button>
-              <button id="settingsLogoutBtn" class="btn btn-danger" type="button"><i data-lucide="log-out"></i>Sair da conta</button>
+              <button class="btn btn-ghost" type="button" onclick="toggleTheme()"><i data-lucide="moon"></i>Alternar tema</button>
+              <button class="btn btn-ghost" type="button" onclick="startOnboarding(true)"><i data-lucide="graduation-cap"></i>Reabrir tutorial</button>
+              <button class="btn btn-danger" type="button" onclick="logout()"><i data-lucide="log-out"></i>Sair da conta</button>
             </div>
             <small id="settingsThemeInfo" class="message"></small>
           </article>
           <article class="card">
             <h4>Salário Automático</h4>
-            <form id="salaryForm" class="inline-form">
+            <form id="salaryForm" class="inline-form" onsubmit="event.preventDefault(); saveSalaryAuto(event)">
               <input type="number" step="0.01" min="0.01" name="amount" id="salaryAmount" placeholder="Salário mensal" required />
               <input type="number" min="1" max="28" name="day" id="salaryDay" placeholder="Dia do mês (1-28)" required />
               <button class="btn btn-secondary" type="submit">Salvar salário automático</button>
@@ -434,10 +452,10 @@
           <article class="card">
             <h4>Dados</h4>
             <div class="inline-form">
-              <button id="syncNowBtn" class="btn btn-secondary" type="button"><i data-lucide="cloud-upload"></i>Sincronizar agora</button>
-              <button id="exportBackupBtn" class="btn btn-ghost" type="button"><i data-lucide="download"></i>Exportar backup</button>
-              <button id="importBackupBtn" class="btn btn-ghost" type="button"><i data-lucide="upload"></i>Importar backup</button>
-              <button id="clearDataBtn" class="btn btn-danger" type="button"><i data-lucide="trash-2"></i>Limpar dados</button>
+              <button class="btn btn-secondary" type="button" onclick="syncNow()"><i data-lucide="cloud-upload"></i>Sincronizar agora</button>
+              <button class="btn btn-ghost" type="button" onclick="exportBackupJson()"><i data-lucide="download"></i>Exportar backup</button>
+              <button class="btn btn-ghost" type="button" onclick="document.getElementById('importBackupFile').click()"><i data-lucide="upload"></i>Importar backup</button>
+              <button class="btn btn-danger" type="button" onclick="clearAllData()"><i data-lucide="trash-2"></i>Limpar dados</button>
             </div>
             <input id="importBackupFile" type="file" accept="application/json" class="hidden" />
             <small class="message">Backup inclui transações, categorias, metas e recorrências.</small>
@@ -445,18 +463,18 @@
         </section>
       </div>
       <nav class="mobile-dock mobile-only">
-        <button class="mobile-tab active" data-view="dashboard"><i data-lucide="layout-dashboard"></i><span>Home</span></button>
-        <button class="mobile-tab" data-view="transactions"><i data-lucide="plus-circle"></i><span>Gasto</span></button>
-        <button class="mobile-tab" data-view="cards"><i data-lucide="credit-card"></i><span>Pagar</span></button>
-        <button class="mobile-tab" data-view="goals"><i data-lucide="target"></i><span>Meta</span></button>
-        <button class="mobile-tab" data-view="settings"><i data-lucide="settings"></i><span>Ajustes</span></button>
+        <button class="mobile-tab active" type="button" onclick="openView('dashboard')"><i data-lucide="layout-dashboard"></i><span>Home</span></button>
+        <button class="mobile-tab" type="button" onclick="openView('transactions')"><i data-lucide="plus-circle"></i><span>Novo</span></button>
+        <button class="mobile-tab" type="button" onclick="openView('statement')"><i data-lucide="file-text"></i><span>Extrato</span></button>
+        <button class="mobile-tab" type="button" onclick="openView('cards')"><i data-lucide="credit-card"></i><span>Pagar</span></button>
+        <button class="mobile-tab" type="button" onclick="openView('settings')"><i data-lucide="settings"></i><span>Ajustes</span></button>
       </nav>
-      <button id="mobileQuickAdd" class="mobile-fab mobile-only btn btn-primary" type="button">
+
+      <button id="fabQuickAdd" class="fab" onclick="quickAddExpense()" aria-label="Adicionar Gasto">
         <i data-lucide="plus"></i>
-        <span>Nova transação</span>
       </button>
     </div>
 
-    <script src="./app.js"></script>
+    <script src="./frontend/app.js"></script>
   </body>
 </html>
