@@ -162,25 +162,27 @@ function renderAuth(){
 }
 function mapAuthUser(user){return {id:user.id,email:user.email,name:user.user_metadata?.name||user.email?.split("@")[0]||"Usuário"}}
 async function fetchCloudData(userId){
-  console.log("Supabase: Tentando buscar dados para", userId);
+  console.log("Supabase: Buscando dados...");
   try {
-    // Busca simplificada apenas da coluna data
-    const {data, error, status, statusText} = await sb
+    // Timeout de 3 segundos para a busca no banco
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    const {data, error} = await sb
       .from("user_finance_data")
       .select("data")
       .eq("user_id", userId)
       .maybeSingle();
 
+    clearTimeout(timeoutId);
+
     if(error) {
-      console.error("Supabase Error (Fetch):", error.code, error.message);
-      toast(`Erro no Banco (${error.code}): ${error.message}`, true);
+      console.error("Supabase: Erro na busca:", error.message);
       return null;
     }
-    
-    console.log(`Supabase: Status ${status} (${statusText}). Dados encontrados:`, !!data);
     return data?.data || null;
   } catch (e) {
-    console.error("Supabase: Erro inesperado", e);
+    console.warn("Supabase: Busca ignorada por lentidão ou erro.");
     return null;
   }
 }
@@ -213,12 +215,13 @@ async function syncNow(){
 }
 
 async function login(user){
+  console.log("App: Iniciando login para", user.email);
   state.user=user;
   const cloud=await fetchCloudData(user.id);
   state.data=cloud||loadData(user.id);
   ensureSettings();
   renderAuth();
-  boot();
+  await boot();
 }
 
 async function logout(){
@@ -1061,32 +1064,28 @@ function registerServiceWorker(){
 }
 
 async function boot(){
+  console.log("App: Iniciando boot...");
   setLoadingUI(true);
   try{
-    await wait(100); ensureSettings(); refreshSelects(); runRecurringDue(true);
+    ensureSettings(); refreshSelects(); runRecurringDue(true);
     renderCategories(); renderTransactions(state.data.transactions); renderCards();
     renderInvoices(); renderRecurring(); renderGoals(); renderSalaryForm();
     renderDashboard(); renderInsights(); renderSettings();
     const last=readLastView(); openView(last);
     if(window.lucide) lucide.createIcons();
-  }catch(err){console.error("Boot erro:",err)}
-  setLoadingUI(false);
+    console.log("App: Boot finalizado com sucesso.");
+  }catch(err){
+    console.error("App: Erro crítico no boot:", err);
+  } finally {
+    setLoadingUI(false);
+  }
 }
 
 // --- Inicialização Centralizada ---
 async function initApp(){
-  console.log("Iniciando App...");
+  console.log("App: Inicializando sistema...");
   try{
-    // Verificar se o Supabase está acessível
-    console.log("Supabase: Verificando conexão...");
-    const { error: connectionError } = await sb.from("user_finance_data").select("count").limit(0);
-    if (connectionError && connectionError.code !== "PGRST116") { // PGRST116 é esperado se a tabela estiver vazia mas acessível
-       console.warn("Supabase: Problema de conexão ou permissão detectado:", connectionError.message);
-    } else {
-       console.log("Supabase: Conexão OK.");
-    }
-
-    // EXPOSIÇÃO GLOBAL IMEDIATA
+    // EXPOSIÇÃO GLOBAL
     window.logout = logout;
     window.openView = openView;
     window.toggleTheme = toggleTheme;
@@ -1123,17 +1122,11 @@ async function initApp(){
     bindUi();
     renderAuth();
 
-    if($("transactionForm")?.date)$("transactionForm").date.value=today();
-    if($("recurringForm")?.nextRunDate)$("recurringForm").nextRunDate.value=today();
-    if($("reportForm")?.month)$("reportForm").month.value=month();
-
-    // Escutar mudanças de autenticação (Fonte Única da Verdade)
+    // Escutar mudanças de autenticação
     sb.auth.onAuthStateChange(async(ev,sess)=>{
-      console.log("Auth Event:", ev);
+      console.log("App: Evento de Auth:", ev);
       if(sess?.user){
-        if(!state.user || state.user.id !== sess.user.id) {
-          await login(mapAuthUser(sess.user));
-        }
+        await login(mapAuthUser(sess.user));
       } else {
         state.user = null;
         state.data = null;
@@ -1142,9 +1135,20 @@ async function initApp(){
       }
     });
 
+    // Timeout de segurança GLOBAL: Se em 4s ainda estiver carregando, libera a tela
+    setTimeout(() => {
+      if (document.body.classList.contains("loading-ui")) {
+        console.warn("App: Carregamento forçado por segurança (timeout).");
+        setLoadingUI(false);
+      }
+    }, 4000);
+
     if(window.lucide) lucide.createIcons();
     registerServiceWorker();
-  }catch(e){console.error("Init erro:",e)}
+  }catch(e){
+    console.error("App: Falha na inicialização:", e);
+    setLoadingUI(false);
+  }
 }
 
 if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", initApp); else initApp();
