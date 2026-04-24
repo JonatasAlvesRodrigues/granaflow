@@ -1,12 +1,503 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta http-equiv="refresh" content="0; url=../index.html">
-    <script type="text/javascript">
-        window.location.href = "../index.html"
-    </script>
-</head>
-<body>
-    Redirecionando para o GranaFlow...
-</body>
+﻿<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f766e" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="manifest" href="frontend/manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="frontend/logo-granaflow.png" />
+    <link rel="apple-touch-icon" href="frontend/logo-granaflow.png" />
+    <title>GranaFlow | Controle Financeiro</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="frontend/styles.css" />
+    <style>
+      /* Fallback para garantir que o site não pareça totalmente quebrado se o CSS externo falhar */
+      body.dark { background-color: #0f1115; color: #f8fafc; }
+      .loading-overlay { position: fixed; inset: 0; background: #0f1115; display: flex; align-items: center; justify-content: center; z-index: 9999; }
+      .spinner { width: 40px; height: 40px; border: 3px solid rgba(16, 185, 129, 0.1); border-top-color: #10b981; border-radius: 50%; animation: spin 0.8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+  </head>
+  <body class="dark loading-ui">
+    <div class="loading-overlay">
+      <div class="spinner"></div>
+    </div>
+
+    <main id="authScreen" class="auth-screen">
+      <article class="auth-card card">
+        <div class="brand">
+          <img class="brand-logo" src="frontend/logo-granaflow.png" alt="Logo GranaFlow" />
+          <div>
+            <h1>GranaFlow</h1>
+            <p>Controle financeiro pessoal inteligente</p>
+          </div>
+        </div>
+
+        <div class="auth-tabs">
+          <button class="auth-tab-btn active" data-auth-tab="login" type="button" onclick="setAuthTab('login')">Entrar</button>
+          <button class="auth-tab-btn" data-auth-tab="register" type="button" onclick="setAuthTab('register')">Cadastrar</button>
+          <button class="auth-tab-btn" data-auth-tab="recover" type="button" onclick="setAuthTab('recover')">Recuperar</button>
+        </div>
+
+        <form id="loginForm" class="auth-form" onsubmit="event.preventDefault(); window.handleLogin(event)">
+          <div class="field">
+            <label>Email</label>
+            <input type="email" name="email" placeholder="seu@email.com" required />
+          </div>
+          <div class="field">
+            <label>Senha</label>
+            <input type="password" name="password" placeholder="••••••••" required />
+          </div>
+          <button type="submit" class="btn btn-primary">Entrar no GranaFlow</button>
+        </form>
+
+        <form id="registerForm" class="auth-form hidden" onsubmit="event.preventDefault(); window.handleRegister(event)">
+          <div class="field">
+            <label>Nome</label>
+            <input type="text" name="name" placeholder="Seu nome" required />
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" name="email" placeholder="seu@email.com" required />
+          </div>
+          <div class="field">
+            <label>Senha (mín. 6)</label>
+            <input type="password" name="password" minlength="6" placeholder="••••••••" required />
+          </div>
+          <button type="submit" class="btn btn-primary">Criar conta</button>
+        </form>
+
+        <form id="recoverForm" class="auth-form hidden" onsubmit="event.preventDefault(); window.handleRecover(event)">
+          <div class="field">
+            <label>Email</label>
+            <input type="email" name="email" placeholder="seu@email.com" required />
+          </div>
+          <button type="submit" class="btn btn-primary">Enviar link de recuperação</button>
+          <p class="section-note">Um link de recuperação será enviado para seu email.</p>
+        </form>
+
+        <form id="resetForm" class="auth-form hidden">
+          <label>Token</label>
+          <input type="text" name="token" required />
+          <label>Nova senha</label>
+          <input type="password" name="newPassword" minlength="6" required />
+          <button type="submit" class="btn btn-secondary">Redefinir senha</button>
+        </form>
+
+        <p id="authMessage" class="message"></p>
+      </article>
+    </main>
+
+    <div id="appScreen" class="app hidden">
+      <aside id="sidebar" class="sidebar">
+        <div class="sidebar-top">
+          <div class="brand compact">
+            <div>
+              <h2>GranaFlow</h2>
+              <p id="userLabel"></p>
+            </div>
+          </div>
+          <button id="closeMenu" class="icon-btn mobile-only" onclick="document.getElementById('sidebar').classList.remove('open')"><i data-lucide="x"></i></button>
+        </div>
+        <nav>
+          <button class="nav-link active" data-view="dashboard" type="button" onclick="openView('dashboard')"><i data-lucide="layout-dashboard"></i>Dashboard</button>
+          <button class="nav-link" data-view="transactions" type="button" onclick="openView('transactions')"><i data-lucide="plus-circle"></i>Nova Transação</button>
+          <button class="nav-link" data-view="statement" type="button" onclick="openView('statement')"><i data-lucide="file-text"></i>Extrato</button>
+          <button class="nav-link" data-view="categories" type="button" onclick="openView('categories')"><i data-lucide="tags"></i>Categorias</button>
+          <button class="nav-link" data-view="cards" type="button" onclick="openView('cards')"><i data-lucide="credit-card"></i>Cartões</button>
+          <button class="nav-link" data-view="recurring" type="button" onclick="openView('recurring')"><i data-lucide="calendar-days"></i>Recorrentes</button>
+          <button class="nav-link" data-view="goals" type="button" onclick="openView('goals')"><i data-lucide="target"></i>Metas</button>
+          <button class="nav-link" data-view="reports" type="button" onclick="openView('reports')"><i data-lucide="bar-chart-3"></i>Relatórios</button>
+          <button class="nav-link" data-view="insights" type="button" onclick="openView('insights')"><i data-lucide="sparkles"></i>Insights</button>
+          <button class="nav-link" data-view="settings" type="button" onclick="openView('settings')"><i data-lucide="settings"></i>Ajustes</button>
+        </nav>
+      </aside>
+
+      <div class="content">
+        <header class="topbar card">
+          <button id="openMenu" class="icon-btn mobile-only" type="button" onclick="document.getElementById('sidebar').classList.add('open')"><i data-lucide="menu"></i></button>
+          <div class="topbar-brand mobile-only">GranaFlow</div>
+          <div class="topbar-text">
+            <h3 id="viewTitle">Dashboard</h3>
+            <p id="viewSubtitle">Visão geral das finanças</p>
+          </div>
+          <div class="topbar-actions">
+            <button id="topbarSettingsBtn" class="btn btn-ghost desktop-only" type="button" onclick="openView('settings')"><i data-lucide="settings"></i>Ajustes</button>
+            <button id="logoutBtn" class="btn btn-danger desktop-only" type="button" onclick="logout()">Sair</button>
+          </div>
+        </header>
+
+        <section id="toast" class="toast hidden"></section>
+        <section id="onboardingModal" class="onboarding hidden" aria-live="polite">
+          <div class="onboarding-backdrop"></div>
+          <article class="card onboarding-card">
+            <p id="onboardingStep" class="onboarding-step">Passo 1 de 3</p>
+            <h4 id="onboardingTitle">Configure seu salário automático</h4>
+            <p id="onboardingText" class="onboarding-text"></p>
+            <div class="onboarding-actions">
+              <button class="btn btn-ghost" type="button" onclick="finishOnboarding(false)">Pular</button>
+              <button class="btn btn-primary" type="button" onclick="nextOnboardingStep()">Próximo</button>
+            </div>
+          </article>
+        </section>
+
+        <section id="dashboardView" class="view">
+          <!-- AI Input Header -->
+          <div class="ai-input-wrapper">
+            <div class="ai-input-container">
+              <i data-lucide="sparkles" class="ai-icon"></i>
+              <input type="text" id="aiQuickInput" placeholder="O que você gastou hoje? (Ex: 20 gasolina)" onkeypress="if(event.key === 'Enter') handleAiInput(this.value)">
+              <button class="ai-submit-btn" onclick="handleAiInput(document.getElementById('aiQuickInput').value)">
+                <i data-lucide="arrow-right"></i>
+              </button>
+            </div>
+          </div>
+
+          <article class="card overview-hero glass-card">
+            <div class="overview-hero-content">
+              <p class="overview-kicker">Saldo Disponível</p>
+              <h2 id="heroBalance">R$ 0,00</h2>
+              <div class="overview-pill-row">
+                <span class="overview-pill income"><i data-lucide="arrow-up-right"></i> <strong id="heroIncome">R$ 0,00</strong></span>
+                <span class="overview-pill expense"><i data-lucide="arrow-down-left"></i> <strong id="heroExpense">R$ 0,00</strong></span>
+                <span class="overview-pill alert"><i data-lucide="activity"></i> <strong id="heroHealth">Neutro</strong></span>
+              </div>
+            </div>
+          </article>
+
+          <div class="metrics-grid">
+            <article class="metric card">
+              <div class="metric-head"><span>Saldo</span><i data-lucide="wallet"></i></div>
+              <h4 id="metricBalance">R$ 0,00</h4>
+            </article>
+            <article class="metric card">
+              <div class="metric-head"><span>Receitas</span><i data-lucide="arrow-up-circle"></i></div>
+              <h4 id="metricIncome">R$ 0,00</h4>
+            </article>
+            <article class="metric card">
+              <div class="metric-head"><span>Despesas</span><i data-lucide="arrow-down-circle"></i></div>
+              <h4 id="metricExpense">R$ 0,00</h4>
+            </article>
+            <article class="metric card">
+              <div class="metric-head"><span>Alertas</span><i data-lucide="bell"></i></div>
+              <h4 id="metricAlerts">0</h4>
+            </article>
+          </div>
+          <div class="grid-2">
+            <article class="card">
+              <h4>Gastos por categoria</h4>
+              <div class="chart-box"><canvas id="categoryChart"></canvas></div>
+            </article>
+            <article class="card">
+              <h4>Orçamentos Mensais</h4>
+              <div id="budgetProgressList" class="budget-progress-list">
+                <p class="message">Defina tetos nas categorias para acompanhar aqui.</p>
+              </div>
+            </article>
+          </div>
+          <div class="grid-2">
+            <article class="card">
+              <h4>Evolução mensal</h4>
+              <div class="chart-box"><canvas id="trendChart"></canvas></div>
+            </article>
+            <article class="card">
+              <h4>Panorama geral (pizza)</h4>
+              <div class="chart-box chart-box-sm"><canvas id="overallPieChart"></canvas></div>
+            </article>
+          </div>
+          <article class="card">
+            <h4>Últimas transações</h4>
+            <div id="latestTransactions"></div>
+          </article>
+        </section>
+
+        <section id="transactionsView" class="view hidden">
+          <article class="card">
+            <h4>Nova transação</h4>
+            <p class="section-note">Registre suas entradas e saídas rapidamente.</p>
+            <form id="transactionForm" class="form-grid transaction-form-pro">
+              <input type="hidden" name="id" />
+              <div class="field">
+                <label for="txType">Tipo</label>
+                <input type="hidden" id="txType" name="type" value="income" required />
+                <div class="type-toggle" role="radiogroup" aria-label="Tipo da transação">
+                  <div class="type-toggle-btn active" data-tx-type="income" role="button" onclick="setTransactionType('income')" aria-pressed="true"><i data-lucide="plus-circle"></i><span>Entrada</span></div>
+                  <div class="type-toggle-btn" data-tx-type="expense" role="button" onclick="setTransactionType('expense')" aria-pressed="false"><i data-lucide="minus-circle"></i><span>Saída</span></div>
+                </div>
+              </div>
+              <div class="field">
+                <label for="txAmount">Valor</label>
+                <input id="txAmount" class="amount-input" type="number" step="0.01" min="0.01" name="amount" placeholder="0,00" required />
+              </div>
+              <div class="field">
+                <label for="paymentMethod">Forma de pagamento</label>
+                <input type="hidden" name="paymentMethod" id="paymentMethod" value="cash" required />
+                <div class="payment-toggle" role="radiogroup" aria-label="Forma de pagamento">
+                  <div class="payment-toggle-btn active" role="button" onclick="setTransactionPaymentMethod('cash')" aria-pressed="true"><i data-lucide="wallet"></i><span>Dinheiro</span></div>
+                  <div class="payment-toggle-btn" role="button" onclick="setTransactionPaymentMethod('pix')" aria-pressed="false"><i data-lucide="qr-code"></i><span>PIX</span></div>
+                  <div class="payment-toggle-btn" role="button" onclick="setTransactionPaymentMethod('debit')" aria-pressed="false"><i data-lucide="credit-card"></i><span>Débito</span></div>
+                  <div class="payment-toggle-btn" role="button" onclick="setTransactionPaymentMethod('credit')" aria-pressed="false"><i data-lucide="badge-dollar-sign"></i><span>Crédito</span></div>
+                </div>
+              </div>
+              <div class="field" id="transactionCategoryField">
+                <label for="transactionCategory">Categoria</label>
+                <select name="categoryId" id="transactionCategory"></select>
+              </div>
+              <div class="field">
+                <label for="txDate">Data</label>
+                <input id="txDate" type="date" name="date" required />
+              </div>
+              <div class="field">
+                <label for="txDescription">Descrição</label>
+                <input id="txDescription" type="text" name="description" placeholder="Ex: Uber para trabalho" />
+              </div>
+              <div id="transactionCreditFields" class="credit-extra hidden">
+                <div class="field">
+                  <label for="installmentCount">Parcelas</label>
+                  <input type="number" min="1" max="24" name="installmentCount" id="installmentCount" value="1" placeholder="Parcelas" />
+                </div>
+              </div>
+              <button class="btn btn-primary transaction-submit" type="submit">Salvar transação</button>
+            </form>
+          </article>
+        </section>
+
+        <section id="statementView" class="view hidden">
+          <article class="card" id="transactionFilterCard">
+            <h4>Filtrar Extrato</h4>
+            <form id="transactionFilter" class="form-grid" onsubmit="event.preventDefault(); filterTransactions(event)">
+              <div class="field">
+                <label>Categoria</label>
+                <select name="categoryId" id="filterCategory"></select>
+              </div>
+              <div class="field">
+                <label>Início</label>
+                <input type="date" name="startDate" />
+              </div>
+              <div class="field">
+                <label>Fim</label>
+                <input type="date" name="endDate" />
+              </div>
+              <div class="field" style="display: flex; align-items: flex-end; gap: 0.5rem;">
+                <button class="btn btn-primary" style="flex: 1" type="submit">Aplicar</button>
+                <button class="btn btn-ghost" style="flex: 1" type="button" onclick="clearTransactionFilters()">Limpar</button>
+              </div>
+            </form>
+          </article>
+          <article class="card">
+            <h4>Movimentações</h4>
+            <div id="transactionList"></div>
+          </article>
+        </section>
+
+        <section id="categoriesView" class="view hidden">
+          <article class="card">
+            <h4>Categoria</h4>
+            <form id="categoryForm" class="inline-form" onsubmit="event.preventDefault(); saveCategory(event)">
+              <input type="hidden" name="id" />
+              <input type="text" name="name" placeholder="Nome" required />
+              <input type="color" name="color" value="#3b82f6" />
+              <input type="text" name="icon" placeholder="Ícone (lucide)" value="circle" />
+              <input type="number" step="0.01" name="budget" placeholder="Teto mensal (opcional)" />
+              <button class="btn btn-primary" type="submit">Salvar</button>
+            </form>
+          </article>
+          <article class="card"><div id="categoryList"></div></article>
+        </section>
+
+        <section id="cardsView" class="view hidden">
+          <article class="card">
+            <h4>A Pagar (Cartão + Recorrentes)</h4>
+            <div class="metrics-grid debt-metrics">
+              <article class="metric card">
+                <div class="metric-head"><span>Parcelas restantes</span><i data-lucide="list-checks"></i></div>
+                <h4 id="debtInstallmentsCount">0</h4>
+              </article>
+              <article class="metric card">
+                <div class="metric-head"><span>Total em aberto</span><i data-lucide="badge-dollar-sign"></i></div>
+                <h4 id="debtInstallmentsAmount">R$ 0,00</h4>
+              </article>
+              <article class="metric card">
+                <div class="metric-head"><span>Recorrentes a vencer</span><i data-lucide="calendar-clock"></i></div>
+                <h4 id="debtRecurringCount">0</h4>
+              </article>
+              <article class="metric card">
+                <div class="metric-head"><span>Valor previsto</span><i data-lucide="receipt-text"></i></div>
+                <h4 id="debtRecurringAmount">R$ 0,00</h4>
+              </article>
+            </div>
+            <div id="debtSummaryList"></div>
+          </article>
+          <article class="card">
+            <h4>Faturas</h4>
+            <form id="invoiceFilter" class="inline-form" onsubmit="event.preventDefault(); renderInvoices(event)">
+              <input type="month" name="month" />
+              <button class="btn btn-ghost" type="submit">Buscar</button>
+            </form>
+            <div id="invoiceList"></div>
+          </article>
+        </section>
+
+        <section id="recurringView" class="view hidden">
+          <article class="card">
+            <h4>Lançamento recorrente</h4>
+            <form id="recurringForm" class="inline-form" onsubmit="event.preventDefault(); saveRecurring(event)">
+              <input type="hidden" name="id" />
+              <select name="type"><option value="income">Entrada</option><option value="expense">Saída</option></select>
+              <input type="number" step="0.01" min="0.01" name="amount" placeholder="Valor" required />
+              <select name="frequency"><option value="daily">Diária</option><option value="weekly">Semanal</option><option value="monthly">Mensal</option></select>
+              <input type="date" name="nextRunDate" required />
+              <select name="categoryId" id="recurringCategory"></select>
+              <input type="text" name="description" placeholder="Descrição" />
+              <button class="btn btn-primary" type="submit">Salvar</button>
+            </form>
+            <button class="btn btn-secondary" type="button" onclick="runRecurringDue(false)">Processar lançamentos vencidos</button>
+          </article>
+          <article class="card"><div id="recurringList"></div></article>
+        </section>
+
+        <section id="goalsView" class="view hidden">
+          <article class="card goals-card">
+            <div class="goals-head">
+              <h4>Metas Financeiras</h4>
+              <p>Defina objetivo, prazo e acompanhe o progresso em tempo real.</p>
+            </div>
+            <form id="goalForm" class="goals-form" onsubmit="event.preventDefault(); saveGoal(event)">
+              <input type="hidden" name="id" />
+              <div class="field">
+                <label for="goalTargetAmount">Valor que quero alcançar</label>
+                <input id="goalTargetAmount" type="number" step="0.01" min="0.01" name="targetAmount" placeholder="Ex: 10000" required />
+              </div>
+              <div class="field">
+                <label for="goalCurrentAmount">Valor que já tenho</label>
+                <input id="goalCurrentAmount" type="number" step="0.01" min="0" name="currentAmount" placeholder="Ex: 2500" required />
+              </div>
+              <div class="field">
+                <label for="goalDurationValue">Prazo</label>
+                <input id="goalDurationValue" type="number" min="1" name="durationValue" placeholder="Ex: 12" required />
+              </div>
+              <div class="field">
+                <label for="goalDurationUnit">Unidade</label>
+                <select id="goalDurationUnit" name="durationUnit" required>
+                  <option value="months">Meses</option>
+                  <option value="years">Anos</option>
+                </select>
+              </div>
+              <button class="btn btn-primary goals-submit" type="submit">Salvar Meta</button>
+            </form>
+          </article>
+          <article class="card">
+            <h4>Minhas metas</h4>
+            <div id="goalList"></div>
+          </article>
+        </section>
+
+        <section id="reportsView" class="view hidden">
+          <article class="card reports-card">
+            <div class="reports-head">
+              <h4>Relatórios Financeiros</h4>
+              <p>Gere visão mensal, compare períodos e exporte seus dados.</p>
+            </div>
+            <div class="reports-grid">
+              <form id="reportForm" class="report-block" onsubmit="event.preventDefault(); generateMonthlyReport(event)">
+                <h5>Relatório mensal</h5>
+                <div class="inline-form">
+                  <input type="month" name="month" required />
+                  <button class="btn btn-primary" type="submit">Gerar mensal</button>
+                </div>
+              </form>
+              <form id="compareForm" class="report-block" onsubmit="event.preventDefault(); compareMonths(event)">
+                <h5>Comparar meses</h5>
+                <div class="inline-form">
+                  <input type="month" name="current" required />
+                  <input type="month" name="previous" required />
+                  <button class="btn btn-secondary" type="submit">Comparar</button>
+                </div>
+              </form>
+              <div class="report-block">
+                <h5>Exportação</h5>
+                <div class="inline-form">
+                  <button class="btn btn-ghost" type="button" onclick="exportCsv()">Exportar CSV</button>
+                  <button class="btn btn-ghost" type="button" onclick="exportPdf()">Exportar PDF</button>
+                </div>
+              </div>
+            </div>
+          </article>
+          <article class="card">
+            <h4>Resultado</h4>
+            <div id="reportOutput" class="report-output"></div>
+          </article>
+        </section>
+
+        <section id="insightsView" class="view hidden">
+          <article class="card">
+            <h4>Insights do GranaFlow</h4>
+            <div id="insightsList"></div>
+          </article>
+          <article class="card">
+            <h4>Comparativo mensal</h4>
+            <div id="insightTrendList"></div>
+          </article>
+          <article class="card">
+            <h4>Top 3 categorias em alta</h4>
+            <div id="insightTopGrowthList"></div>
+          </article>
+          <article class="card"><h4>Notificações</h4><div id="notificationList"></div></article>
+        </section>
+
+        <section id="settingsView" class="view hidden">
+          <article class="card">
+            <h4>Aparência e Acesso</h4>
+            <div class="inline-form">
+              <button class="btn btn-ghost" type="button" onclick="toggleTheme()"><i data-lucide="moon"></i>Alternar tema</button>
+              <button class="btn btn-ghost" type="button" onclick="startOnboarding(true)"><i data-lucide="graduation-cap"></i>Reabrir tutorial</button>
+              <button class="btn btn-danger" type="button" onclick="logout()"><i data-lucide="log-out"></i>Sair da conta</button>
+            </div>
+            <small id="settingsThemeInfo" class="message"></small>
+          </article>
+          <article class="card">
+            <h4>Salário Automático</h4>
+            <form id="salaryForm" class="inline-form" onsubmit="event.preventDefault(); saveSalaryAuto(event)">
+              <input type="number" step="0.01" min="0.01" name="amount" id="salaryAmount" placeholder="Salário mensal" required />
+              <input type="number" min="1" max="28" name="day" id="salaryDay" placeholder="Dia do mês (1-28)" required />
+              <button class="btn btn-secondary" type="submit">Salvar salário automático</button>
+            </form>
+            <small id="salaryInfo" class="message"></small>
+          </article>
+          <article class="card">
+            <h4>Dados</h4>
+            <div class="inline-form">
+              <button class="btn btn-secondary" type="button" onclick="syncNow()"><i data-lucide="cloud-upload"></i>Sincronizar agora</button>
+              <button class="btn btn-ghost" type="button" onclick="exportBackupJson()"><i data-lucide="download"></i>Exportar backup</button>
+              <button class="btn btn-ghost" type="button" onclick="document.getElementById('importBackupFile').click()"><i data-lucide="upload"></i>Importar backup</button>
+              <button class="btn btn-danger" type="button" onclick="clearAllData()"><i data-lucide="trash-2"></i>Limpar dados</button>
+            </div>
+            <input id="importBackupFile" type="file" accept="application/json" class="hidden" />
+            <small class="message">Backup inclui transações, categorias, metas e recorrências.</small>
+          </article>
+        </section>
+      </div>
+      <nav class="mobile-dock mobile-only">
+        <button class="mobile-tab active" data-view="dashboard" type="button" onclick="openView('dashboard')"><i data-lucide="layout-dashboard"></i><span>Home</span></button>
+        <button class="mobile-tab" data-view="transactions" type="button" onclick="openView('transactions')"><i data-lucide="plus-circle"></i><span>Novo</span></button>
+        <button class="mobile-tab" data-view="statement" type="button" onclick="openView('statement')"><i data-lucide="file-text"></i><span>Extrato</span></button>
+      </nav>
+
+      <button id="fabQuickAdd" class="fab" onclick="quickAddExpense()" aria-label="Adicionar Gasto">
+        <i data-lucide="plus"></i>
+      </button>
+    </div>
+
+    <script src="frontend/app.js"></script>
+  </body>
 </html>

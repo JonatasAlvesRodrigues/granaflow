@@ -221,6 +221,13 @@ body:not(.dark) .glass-card {
   display: flex;
   align-items: center;
   gap: 1.25rem;
+  transition: all 0.2s ease;
+}
+
+.list-item:hover {
+  background: var(--bg-elev);
+  transform: translateX(4px);
+  border-color: var(--primary-soft);
 }
 
 .list-item-icon {
@@ -402,12 +409,18 @@ input, select, textarea {
   border-radius: var(--radius);
   padding: 1.5rem;
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
   word-break: break-word;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary-soft);
 }
 
 @media (max-width: 480px) {
@@ -422,10 +435,6 @@ input, select, textarea {
   font-size: 1.1rem;
   font-weight: 700;
   line-height: 1.2;
-}
-
-.card:hover {
-  box-shadow: var(--shadow-md);
 }
 
 .section-note, .message, .topbar p, .overview-hero p, .brand p, label, .budget-footer, .report-empty {
@@ -443,7 +452,7 @@ input, select, textarea {
 }
 
 .auth-card {
-  width: min(420px, 100%);
+  width: min(480px, 100%);
   padding: 2.5rem;
   border-radius: var(--radius);
   background: var(--surface);
@@ -498,15 +507,19 @@ input, select, textarea {
 
 .auth-tab-btn {
   flex: 1;
-  padding: 0.7rem;
+  padding: 0.7rem 0.4rem;
   border-radius: 10px;
   border: none;
   background: transparent;
   color: var(--muted);
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .auth-tab-btn.active {
@@ -777,6 +790,7 @@ body.loading-ui .loading-overlay {
 .nav-link:hover {
   color: var(--text);
   background: var(--bg-elev);
+  padding-left: 1.25rem;
 }
 
 .content {
@@ -966,6 +980,12 @@ body.dark .overview-pill {
   justify-content: center;
   gap: 0.4rem;
   min-height: 44px;
+  transition: all 0.2s ease;
+}
+
+.quick-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
 }
 
 .metric {
