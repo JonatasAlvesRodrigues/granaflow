@@ -144,7 +144,7 @@ function saveData(){
   state.syncTimer=setTimeout(()=>pushCloudData(),450);
 }
 function setAuthTab(tab){
-  $$(".tab-btn").forEach(b=>b.classList.toggle("active",b.dataset.authTab===tab));
+  $$(".auth-tab-btn").forEach(b=>b.classList.toggle("active",b.dataset.authTab===tab));
   const l=$("loginForm"), r=$("registerForm"), v=$("recoverForm"), s=$("resetForm");
   if(l) l.classList.toggle("hidden",tab!=="login");
   if(r) r.classList.toggle("hidden",tab!=="register");
@@ -198,305 +198,104 @@ async function pushCloudData(){
     const { error } = await sb.from("user_finance_data").upsert(payload, { onConflict: "user_id" });
     if(error) {
       console.error("Supabase Error (Push):", error.message);
-      toast("Erro ao sincronizar com a nuvem", true);
+      toast("Erro ao salvar na nuvem: " + error.message, true);
     }
   } catch (e) {
-    console.error("Supabase: Erro ao enviar", e);
+    console.error("Supabase: Erro inesperado no push", e);
   }
-}
-async function hydrateFromCloud(userId){
-  try{
-    const cloud=await fetchCloudData(userId);
-    if(cloud){
-      state.data={...emptyData(),...cloud};
-      localStorage.setItem(dataKey(userId),JSON.stringify(state.data));
-    }else{
-      if(dataScore(state.data)>0) await pushCloudData();
-    }
-  }catch(err){
-    console.error(err);
-    toast("Sem conexão com Supabase. Usando backup local.",true);
-  }
-}
-async function login(user) {
-  console.log("Login: Iniciando para", user.email);
-  state.user = user;
-  
-  // 1. Carregar local
-  state.data = loadData(user.id);
-  console.log("Login: Local carregado (Score:", dataScore(state.data), ")");
-
-  renderAuth();
-  setLoadingUI(true);
-
-  try {
-    // 2. Tentar Nuvem
-    const cloud = await fetchCloudData(user.id);
-    
-    if (cloud) {
-      const cloudScore = dataScore(cloud);
-      console.log("Login: Dados da nuvem recebidos (Score:", cloudScore, ")");
-      
-      // Se a nuvem tem QUALQUER dado, ela manda (para recuperar o que sumiu)
-      if (cloudScore > 0) {
-        console.log("Login: Restaurando dados da nuvem.");
-        state.data = { ...emptyData(), ...cloud };
-        localStorage.setItem(dataKey(user.id), JSON.stringify(state.data));
-      }
-    } else {
-      console.log("Login: Nuvem retornou vazio.");
-    }
-  } catch (err) {
-    console.error("Login: Erro sincronia", err);
-  }
-
-  await boot();
-  setLoadingUI(false);
-}
-async function logout() {
-  console.log("Forçando logout...");
-  try {
-    await sb.auth.signOut().catch(e => console.warn("Erro signOut:", e));
-  } catch (err) {}
-  state.user = null;
-  state.data = null;
-  renderAuth();
-}
-window.logout = logout;
-
-function bindAuth() {
-  console.log("Vinculando formulários de Auth...");
-  
-  window.handleLogin = async (e) => {
-    e.preventDefault();
-    console.log("Tentando login...");
-    const f = Object.fromEntries(new FormData(e.target));
-    const email = String(f.email || "").trim().toLowerCase();
-    const password = String(f.password || "");
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) return $("authMessage").textContent = error.message;
-    await login(mapAuthUser(data.user));
-  };
-
-  window.handleRegister = async (e) => {
-    e.preventDefault();
-    console.log("Tentando cadastro...");
-    const f = Object.fromEntries(new FormData(e.target));
-    const name = String(f.name || "").trim(),
-      email = String(f.email || "").trim().toLowerCase(),
-      password = String(f.password || "");
-    if (!name || !email || password.length < 6) return $("authMessage").textContent = "Nome, email e senha (mín. 6).";
-    const { data, error } = await sb.auth.signUp({ email, password, options: { data: { name } } });
-    if (error) return $("authMessage").textContent = error.message;
-    if (data.user && data.session) {
-      await login(mapAuthUser(data.user));
-    } else {
-      $("authMessage").textContent = "Conta criada. Verifique seu email para confirmar.";
-      setAuthTab("login");
-    }
-  };
-
-  window.handleRecover = async (e) => {
-    e.preventDefault();
-    const email = String(new FormData(e.target).get("email") || "").trim().toLowerCase();
-    const { error } = await sb.auth.resetPasswordForEmail(email);
-    $("authMessage").textContent = error ? error.message : "Enviamos um link de recuperação para seu email.";
-  };
-}
-
-function subtitle(view){return({dashboard:"Visão geral",transactions:"Nova transação",statement:"Extrato de movimentações",categories:"Categorias",cards:"Cartões",recurring:"Recorrentes",goals:"Metas",reports:"Relatórios",insights:"Insights",settings:"Preferências e dados"})[view]||""}
-const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
-const prefersReducedMotion=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-function setLoadingUI(on){document.body.classList.toggle("loading-ui",!!on)}
-
-function animateValue(el,to,{currency=false,duration=620}={}){
-  if(!el) return;
-  const target=num(to);
-  if(prefersReducedMotion){
-    el.textContent=currency?money(target):String(Math.round(target));
-    el.dataset.value=String(target);
-    return;
-  }
-  const from=num(el.dataset.value ?? 0);
-  const diff=target-from;
-  if(Math.abs(diff)<0.01){
-    el.textContent=currency?money(target):String(Math.round(target));
-    el.dataset.value=String(target);
-    return;
-  }
-  const started=performance.now();
-  el.classList.add("value-pop");
-  const tick=(now)=>{
-    const p=Math.min((now-started)/duration,1);
-    const eased=1-Math.pow(1-p,3);
-    const value=from+(diff*eased);
-    el.textContent=currency?money(value):String(Math.round(value));
-    if(p<1) requestAnimationFrame(tick);
-    else{
-      el.dataset.value=String(target);
-      setTimeout(()=>el.classList.remove("value-pop"),120);
-    }
-  };
-  requestAnimationFrame(tick);
-}
-
-function animateView(el){
-  if(!el)return;
-  el.classList.remove("view-enter");
-  void el.offsetWidth;
-  el.classList.add("view-enter");
-  const cards=[...el.querySelectorAll(".card")];
-  cards.forEach((card,index)=>{
-    card.classList.remove("stagger-in");
-    card.style.setProperty("--stagger-index",String(index));
-  });
-  if(prefersReducedMotion) return;
-  requestAnimationFrame(()=>cards.forEach(card=>card.classList.add("stagger-in")));
-}
-
-function toggleTheme(){
-  document.body.classList.toggle("dark");
-  localStorage.setItem(KEYS.theme,document.body.classList.contains("dark")?"dark":"light");
-  renderDashboard();
-  renderSettings();
-}
-window.toggleTheme = toggleTheme;
-
-function renderSettings(){
-  if(!$("settingsThemeInfo")) return;
-  const isDark=document.body.classList.contains("dark");
-  $("settingsThemeInfo").textContent=isDark?"Tema atual: escuro.":"Tema atual: claro.";
-  renderSalaryForm();
-}
-
-function refreshMainViews(){
-  refreshSelects();
-  renderCategories();
-  renderTransactions(state.data.transactions);
-  renderCards();
-  renderInvoices();
-  renderRecurring();
-  renderGoals();
-  renderDashboard();
-  renderInsights();
-  renderSettings();
-  if(window.lucide) lucide.createIcons();
 }
 
 async function syncNow(){
-  if(!state.user) return toast("Faça login para sincronizar", true);
-  setLoadingUI(true);
-  try{
-    console.log("Sincronização manual iniciada...");
-    const cloud = await fetchCloudData(state.user.id);
-    if(cloud) {
-      state.data = { ...emptyData(), ...cloud };
-      localStorage.setItem(dataKey(state.user.id), JSON.stringify(state.data));
-      refreshMainViews();
-      toast("Dados restaurados da nuvem.");
-    } else {
-      await pushCloudData();
-      toast("Dados locais enviados para a nuvem.");
-    }
-  }catch(err){
-    console.error("Erro na sincronização manual:", err);
-    toast("Falha na sincronização: " + err.message, true);
+  if(!state.user) return;
+  toast("Sincronizando...");
+  await pushCloudData();
+  toast("Sincronizado com sucesso!");
+}
+
+async function login(user){
+  state.user=user;
+  const cloud=await fetchCloudData(user.id);
+  state.data=cloud||loadData(user.id);
+  ensureSettings();
+  renderAuth();
+  boot();
+}
+
+async function logout(){
+  if(state.syncTimer) {
+    clearTimeout(state.syncTimer);
+    await pushCloudData();
   }
-  setLoadingUI(false);
+  await sb.auth.signOut();
+  state.user=null;
+  state.data=null;
+  localStorage.removeItem(KEYS.lastView);
+  renderAuth();
 }
 
-function exportBackupJson(){
-  if(!state.data) return;
-  const payload={exportedAt:new Date().toISOString(),app:"GranaFlow",data:state.data};
-  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json;charset=utf-8"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url;
-  a.download=`granaflow-backup-${today()}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+async function handleLogin(e){
+  e.preventDefault();
+  const f=new FormData(e.target);
+  const email=f.get("email"), pass=f.get("password");
+  const msg=$("authMessage"); if(msg) msg.textContent="Entrando...";
+  const {data,error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error){ if(msg) msg.textContent=error.message; return; }
 }
 
-function importBackupFromFile(file){
-  if(!file) return;
-  const reader=new FileReader();
-  reader.onload=()=>{
-    try{
-      const parsed=JSON.parse(String(reader.result||"{}"));
-      const incoming=parsed?.data ?? parsed;
-      state.data={...emptyData(),...incoming};
-      ensureSettings();
-      saveData();
-      refreshMainViews();
-      toast("Backup importado com sucesso.");
-    }catch(err){
-      console.error(err);
-      toast("Arquivo de backup inválido.",true);
-    }
-  };
-  reader.readAsText(file);
-}
-
-async function clearAllData(){
-  if(!confirm("⚠️ ATENÇÃO CRÍTICA: Isso apagará TODOS os seus dados financeiros de forma PERMANENTE em todos os seus dispositivos e na nuvem. Esta ação não pode ser desfeita.\n\nDeseja realmente apagar tudo?")) return;
-  
-  setLoadingUI(true);
-  try {
-    const empty = emptyData();
-    
-    // 1. Limpar na Nuvem (Supabase)
-    if (state.user) {
-      console.log("Limpando dados na nuvem...");
-      const { error } = await sb.from("user_finance_data").upsert({
-        user_id: state.user.id,
-        data: empty,
-        updated_at: new Date().toISOString()
-      }, { onConflict: "user_id" });
-      
-      if (error) throw new Error("Erro ao limpar dados na nuvem: " + error.message);
-    }
-
-    // 2. Limpeza Nuclear do LocalStorage
-    Object.keys(localStorage).forEach(key => {
-      if (key.includes("granaflow") || key.includes("finanzen")) {
-        localStorage.removeItem(key);
-      }
-    });
-
-    // 3. Resetar estado e recarregar
-    state.data = empty;
-    alert("✅ Dados apagados com sucesso! O sistema será reiniciado.");
-    window.location.reload();
-  } catch (e) {
-    console.error("Erro na exclusão:", e);
-    toast("Erro ao excluir: " + e.message, true);
-  } finally {
-    setLoadingUI(false);
+async function handleRegister(e){
+  e.preventDefault();
+  const f=new FormData(e.target);
+  const name=f.get("name"), email=f.get("email"), pass=f.get("password");
+  const msg=$("authMessage"); if(msg) msg.textContent="Criando conta...";
+  const {data,error}=await sb.auth.signUp({email,password:pass,options:{data:{name}}});
+  if(error){ if(msg) msg.textContent=error.message; return; }
+  if(data.user && data.session){
+    await login(mapAuthUser(data.user));
+  } else {
+    if(msg) msg.textContent="Verifique seu email para confirmar o cadastro.";
   }
 }
-window.clearAllData = clearAllData;
 
+async function handleRecover(e){
+  e.preventDefault();
+  const email=new FormData(e.target).get("email");
+  const msg=$("authMessage"); if(msg) msg.textContent="Enviando...";
+  const {error}=await sb.auth.resetPasswordForEmail(email);
+  if(error){ if(msg) msg.textContent=error.message; return; }
+  if(msg) msg.textContent="Email enviado!";
+}
+
+function bindAuth(){
+  on("loginForm","submit",handleLogin);
+  on("registerForm","submit",handleRegister);
+  on("recoverForm","submit",handleRecover);
+}
+
+// --- Funções Auxiliares de Dados ---
+const cat=(id)=>state.data.categories.find(c=>c.id===id);
+const acc=(id)=>state.data.accounts.find(a=>a.id===id);
+const txVM=(t)=>({...t,categoryName:cat(t.categoryId)?.name||"Sem categoria",accountName:acc(t.accountId)?.name||"Geral"});
+
+// --- Gráficos ---
+function draw(key,id,type,data){
+  const ctx=$(id)?.getContext("2d"); if(!ctx)return;
+  if(state.charts[key])state.charts[key].destroy();
+  state.charts[key]=new Chart(ctx,{type,data,options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:type!=="bar"}}}});
+}
+
+// --- Navegação ---
 function openView(view){
-  console.log("Abrindo view:", view);
-  const navBtn = document.querySelector(`.nav-link[data-view="${view}"], .mobile-tab[data-view="${view}"]`);
-  const targetView = $(`${view}View`);
+  const targetView = $(view + "View");
   if (!targetView) return;
 
-  $$(".nav-link").forEach(n=>n.classList.remove("active"));
-  $$(".mobile-tab").forEach(n=>n.classList.remove("active"));
+  $$(".nav-link").forEach(l=>l.classList.toggle("active",l.dataset.view===view));
+  $$(".mobile-tab").forEach(l=>l.classList.toggle("active",l.dataset.view===view));
   
   const viewTitleEl = $("viewTitle");
   const viewSubtitleEl = $("viewSubtitle");
   const topbarBrandEl = document.querySelector(".topbar-brand");
 
-  if (navBtn) {
-    navBtn.classList.add("active");
-    const desktopBtn=document.querySelector(`.nav-link[data-view="${view}"]`); if(desktopBtn) desktopBtn.classList.add("active");
-    const mobileBtn=document.querySelector(`.mobile-tab[data-view="${view}"]`); if(mobileBtn) mobileBtn.classList.add("active");
-    if (viewTitleEl) viewTitleEl.textContent = navBtn.textContent.trim();
-  } else {
-    if (viewTitleEl) viewTitleEl.textContent = subtitle(view);
-  }
+  if (viewTitleEl) viewTitleEl.textContent = title(view);
 
   // Ajuste para o mobile header discreto
   if (topbarBrandEl) {
@@ -509,7 +308,8 @@ function openView(view){
         topbarBrandEl.style.display = "none";
         if (viewTitleEl) {
           viewTitleEl.style.display = "block";
-          viewTitleEl.style.fontSize = "1.1rem"; // Título menor no mobile
+          // Ajuste fino para não encavalar no menu
+          viewTitleEl.style.textAlign = "center"; 
         }
         if (viewSubtitleEl) viewSubtitleEl.style.display = "none";
       }
@@ -517,7 +317,7 @@ function openView(view){
       topbarBrandEl.style.display = "none";
       if (viewTitleEl) {
         viewTitleEl.style.display = "block";
-        viewTitleEl.style.fontSize = "1.5rem";
+        viewTitleEl.style.textAlign = "left";
       }
       if (viewSubtitleEl) viewSubtitleEl.style.display = "block";
     }
@@ -532,6 +332,11 @@ function openView(view){
   saveLastView(view);
   if(view==="insights") renderInsights();
   if(view==="settings") renderSettings();
+  if(window.lucide) lucide.createIcons();
+
+  // Esconder FAB na tela de transações para evitar redundância
+  const fab = $("fabQuickAdd");
+  if(fab) fab.style.display = (view === "transactions") ? "none" : "grid";
 }
 window.openView = openView;
 
@@ -542,456 +347,529 @@ function renderOnboarding(){
   if(s) s.textContent=`Passo ${state.onboardingIndex+1} de ${ONBOARDING_STEPS.length}`;
   if(t) t.textContent=step.title;
   if(tx) tx.textContent=step.text;
-  if(n) n.textContent=state.onboardingIndex===ONBOARDING_STEPS.length-1?"Concluir":"Próximo";
   openView(step.view);
-  setTimeout(()=>step.focus?.(),80);
+  if(typeof step.focus === "function") step.focus();
 }
 
 function startOnboarding(force=false){
-  ensureSettings();
-  if(!force && state.data.settings.onboardingDone) return;
-  state.onboardingIndex=0;
-  const modal = $("onboardingModal");
-  if (modal) {
-    modal.classList.remove("hidden");
-    modal.style.pointerEvents = "auto";
+  if(!state.data.settings.onboardingDone || force){
+    state.onboardingIndex=0;
+    $("onboardingModal").classList.remove("hidden");
+    renderOnboarding();
   }
-  renderOnboarding();
-}
-window.startOnboarding = startOnboarding;
-
-function finishOnboarding(showToast=true){
-  ensureSettings();
-  state.data.settings.onboardingDone=true;
-  const m=$("onboardingModal"); if(m) m.classList.add("hidden");
-  saveData();
-  if(showToast) toast("Onboarding concluído.");
 }
 
 function nextOnboardingStep(){
-  if(state.onboardingIndex>=ONBOARDING_STEPS.length-1){
+  state.onboardingIndex++;
+  if(state.onboardingIndex >= ONBOARDING_STEPS.length){
     finishOnboarding(true);
-    return;
-  }
-  state.onboardingIndex+=1;
-  renderOnboarding();
-}
-
-function quickAddExpense(){
-  openView("transactions");
-  const form = $("transactionForm");
-  if(!form) return;
-  setTransactionType("expense");
-  setTransactionPaymentMethod("cash");
-  if(form.date) form.date.value = today();
-  toggleTransactionPaymentFields();
-  if(form.amount) form.amount.focus();
-}
-window.quickAddExpense = quickAddExpense;
-
-function setTransactionType(type){
-  const form=$("transactionForm");
-  if(!form || !form.type) return;
-  const value=type==="expense"?"expense":"income";
-  form.type.value=value;
-  $$(".type-toggle-btn").forEach(btn=>{
-    const active=btn.dataset.txType===value;
-    btn.classList.toggle("active",active);
-  });
-  const categoryField=$("transactionCategoryField");
-  if(categoryField) categoryField.classList.toggle("hidden",value==="income");
-  renderPaymentOptionsByType(value,{preferredMethod:form.paymentMethod?.value});
-  if(value==="income") applyIncomeCategoryByMethod();
-}
-
-function setTransactionPaymentMethod(method){
-  const form=$("transactionForm");
-  if(!form || !form.paymentMethod) return;
-  const buttons=$$(".payment-toggle-btn:not(.is-hidden-option)");
-  const allowed=buttons.map(btn=>btn.dataset.paymentMethod).filter(Boolean);
-  let value=allowed.includes(method)?method:"";
-  if(!value&&allowed.includes("cashpix")&&(method==="cash"||method==="pix")) value="cashpix";
-  if(!value&&allowed.includes("cash")) value="cash";
-  if(!value&&allowed.length) value=allowed[0];
-  if(!value) return;
-  form.paymentMethod.value=value;
-  buttons.forEach(btn=>btn.classList.toggle("active",btn.dataset.paymentMethod===value));
-  if(form.type && form.type.value==="income") applyIncomeCategoryByMethod();
-}
-
-function getOrCreateCategoryByName(name,{color="#3b82f6",icon="circle"}={}){
-  if(!state.data) return "";
-  const normalized=String(name||"").trim().toLowerCase();
-  if(!normalized) return "";
-  let c=state.data.categories.find(x=>String(x.name||"").trim().toLowerCase()===normalized);
-  if(c) return c.id;
-  c={id:uid("cat"),name,color,icon};
-  state.data.categories.push(c);
-  refreshSelects();
-  renderCategories();
-  return c.id;
-}
-
-function applyIncomeCategoryByMethod(){
-  const form=$("transactionForm");
-  if(!form||!state.data||form.type?.value!=="income") return;
-  const method=form.paymentMethod?.value;
-  if(method==="freelance"){
-    form.categoryId.value=getOrCreateCategoryByName("Freela",{color:"#f97316",icon:"briefcase-business"});
-  }else{
-    form.categoryId.value=getOrCreateCategoryByName("Outras entradas",{color:"#0ea5e9",icon:"banknote"});
+  } else {
+    renderOnboarding();
   }
 }
 
-function renderPaymentOptionsByType(type,{preferredMethod}={}){
-  const form=$("transactionForm");
-  const wrap=document.querySelector(".payment-toggle");
-  if(!form||!wrap) return;
-  const options=PAYMENT_OPTIONS[type==="expense"?"expense":"income"];
-  const buttons=$$(".payment-toggle-btn");
-  buttons.forEach((btn,index)=>{
-    const option=options[index];
-    if(!option){
-      btn.classList.add("is-hidden-option");
-      return;
-    }
-    btn.classList.remove("is-hidden-option");
-    btn.dataset.paymentMethod=option.value;
-    btn.innerHTML=`<i data-lucide="${option.icon}"></i><span>${option.label}</span>`;
-    btn.setAttribute("onclick", `setTransactionPaymentMethod('${option.value}')`);
+function finishOnboarding(done=true){
+  state.data.settings.onboardingDone=done;
+  saveData();
+  $("onboardingModal").classList.add("hidden");
+}
+
+function title(v){const m={dashboard:"Dashboard",transactions:"Nova Transação",statement:"Extrato",categories:"Categorias",cards:"Cartões e Faturas",recurring:"Recorrentes",goals:"Metas Financeiras",reports:"Relatórios",insights:"Insights",settings:"Ajustes"}; return m[v]||v}
+function subtitle(v){const m={dashboard:"Visão geral das finanças",transactions:"Registre seus gastos e ganhos",statement:"Histórico detalhado",categories:"Organize seus tipos de gastos",cards:"Acompanhe o que está por vir",recurring:"Contas fixas e assinaturas",goals:"Planeje seus sonhos",reports:"Análise de desempenho",insights:"IA: Dicas e tendências",settings:"Preferências do sistema"}; return m[v]||""}
+
+function bindUi(){
+  on("transactionForm","submit",saveTransaction);
+  on("categoryForm","submit",saveCategory);
+  on("goalForm","submit",saveGoal);
+  on("salaryForm","submit",saveSalaryAuto);
+  on("transactionFilter","submit",filterTransactions);
+  on("reportForm","submit",generateMonthlyReport);
+  on("compareForm","submit",compareMonths);
+  
+  on("aiQuickInput", "keypress", (e) => {
+    if (e.key === "Enter") handleAiInput(e.target.value);
   });
-  const normalized=type==="income" && (preferredMethod==="cash"||preferredMethod==="pix") ? "cashpix" : preferredMethod;
-  const nextMethod=options.some(o=>o.value===normalized)?normalized:options[0].value;
-  setTransactionPaymentMethod(nextMethod);
+  
+  const txTypeInput = $("txType");
+  if (txTypeInput) {
+    on("txType", "change", () => refreshSelects());
+  }
+
+  on("importBackupFile", "change", importBackupJson);
+}
+
+function refreshSelects(){
+  const catSel=$("transactionCategory"); if(catSel){catSel.innerHTML=state.data.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join("")}
+  const filterCat=$("filterCategory"); if(filterCat){filterCat.innerHTML=`<option value="">Todas</option>`+state.data.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join("")}
+  const recurringCat=$("recurringCategory"); if(recurringCat){recurringCat.innerHTML=state.data.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join("")}
+}
+
+function renderCategories(){
+  const list=$("categoryList"); if(!list) return;
+  list.innerHTML=state.data.categories.map(c=>`
+    <div class="list-item">
+      <div class="list-item-icon" style="background: ${c.color}20; color: ${c.color}"><i data-lucide="${c.icon||'circle'}"></i></div>
+      <div style="flex:1"><strong>${c.name}</strong><br><small>Teto: ${money(c.budget)}</small></div>
+      <div class="list-actions">
+        <button class="btn btn-ghost" onclick="editCategory('${c.id}')">Editar</button>
+        <button class="btn btn-danger" onclick="removeCategory('${c.id}')">Excluir</button>
+      </div>
+    </div>
+  `).join("")||"<p class='message'>Nenhuma categoria personalizada.</p>";
   if(window.lucide) lucide.createIcons();
 }
 
-function toggleTransactionPaymentFields(){
-  const form = $("transactionForm");
-  if(!form) return;
-  const showCredit = form.type?.value==="expense" && form.paymentMethod?.value==="credit";
-  const fields=$("transactionCreditFields");
-  if(fields) fields.classList.toggle("hidden", !showCredit);
-  if(showCredit && form.installmentCount && !form.installmentCount.value) form.installmentCount.value = "1";
+function editCategory(id){
+  const c=cat(id); if(!c) return;
+  const f=$("categoryForm");
+  f.id.value=c.id; f.name.value=c.name; f.color.value=c.color; f.icon.value=c.icon||"circle"; f.budget.value=c.budget||"";
 }
 
-function clearTransactionFilters() {
-  const form = $("transactionFilter");
-  if (form) {
-    form.reset();
-    if (state.data) renderTransactions(state.data.transactions);
+function removeCategory(id){
+  if(CATS.find(c=>c.id===id)){ toast("Categorias padrão não podem ser excluídas.",true); return; }
+  if(!confirm("Excluir categoria?")) return;
+  state.data.categories=state.data.categories.filter(c=>c.id!==id);
+  saveData(); renderCategories(); refreshSelects();
+}
+
+function saveCategory(e){
+  e.preventDefault();
+  const f=new FormData(e.target);
+  const id=f.get("id");
+  const catData={id:id||uid("cat"),name:f.get("name"),color:f.get("color"),icon:f.get("icon")||"circle",budget:num(f.get("budget"))};
+  if(id){
+    const idx=state.data.categories.findIndex(c=>c.id===id);
+    if(idx!==-1) state.data.categories[idx]=catData;
+  } else {
+    state.data.categories.push(catData);
   }
+  saveData(); renderCategories(); refreshSelects(); e.target.reset(); f.set("id","");
 }
-window.clearTransactionFilters = clearTransactionFilters;
 
-function bindUi() {
-  console.log("Vinculando UI (Formulários)...");
-  // O sistema de cliques agora é 100% via onclick no HTML para máxima confiabilidade
-  
-  const imp=$("importBackupFile"); if(imp) imp.addEventListener("change", e => {
-    const f = e.target.files?.[0]; if (f) importBackupFromFile(f); e.target.value = "";
+function setTransactionType(type){
+  const input=$("txType"); if(!input) return;
+  input.value=type;
+  $$(".type-toggle-btn").forEach(b=>b.classList.toggle("active",b.dataset.txType===type));
+  refreshSelects();
+}
+window.setTransactionType = setTransactionType;
+
+function setTransactionPaymentMethod(method){
+  const input=$("paymentMethod"); if(!input) return;
+  input.value=method;
+  $$(".payment-toggle-btn").forEach(b=>{
+    const btnMethod = b.getAttribute('onclick').match(/'([^']+)'/)[1];
+    b.classList.toggle("active",btnMethod===method);
   });
-
-  bindForms();
+  $("transactionCreditFields").classList.toggle("hidden",method!=="credit");
 }
+window.setTransactionPaymentMethod = setTransactionPaymentMethod;
 
-function bindForms(){
-  on("transactionForm","submit",saveTransaction);
-  const tType=$("transactionForm")?.type; if(tType) tType.addEventListener("change",toggleTransactionPaymentFields);
-  on("transactionFilter","submit",filterTransactions);
-  on("categoryForm","submit",saveCategory);
-  on("invoiceFilter","submit",renderInvoices);
-  on("recurringForm","submit",saveRecurring);
-  on("salaryForm","submit",saveSalaryAuto);
-  on("goalForm","submit",saveGoal);
-  on("reportForm","submit",generateMonthlyReport);
-  on("compareForm","submit",compareMonths);
-}
+function saveTransaction(e){
+  e.preventDefault();
+  const f=new FormData(e.target);
+  const id=f.get("id");
+  const txData={
+    id:id||uid("tx"),
+    type:f.get("type"),
+    amount:num(f.get("amount")),
+    categoryId:f.get("categoryId"),
+    date:f.get("date"),
+    description:f.get("description"),
+    paymentMethod:f.get("paymentMethod"),
+    installmentCount:num(f.get("installmentCount"))||1
+  };
 
-function fill(sel,items,ph){const s=$(sel);if(!s)return;const old=s.value;s.innerHTML=`<option value="">${ph}</option>`;items.forEach(i=>{const o=document.createElement("option");o.value=i.id;o.textContent=i.name;s.appendChild(o)});if([...s.options].some(o=>o.value===old))s.value=old}
-function refreshSelects(){fill("transactionCategory",state.data.categories,"Categoria");fill("filterCategory",state.data.categories,"Todas");fill("recurringCategory",state.data.categories,"Categoria")}
-const cat=(id)=>state.data.categories.find(x=>x.id===id);
-function txVM(t){return {...t,categoryName:cat(t.categoryId)?.name||"Sem categoria"}}
-
-function txEffect(t,rev=false){
-  if(!t.accountId)return;
-  if(t.type==="expense" && t.paymentMethod==="credit") return;
-  const a=state.data.accounts.find(x=>x.id===t.accountId);if(!a)return;
-  const n=num(t.amount),s=rev?-1:1;
-  if(t.type==="income")a.balance=num(a.balance)+n*s;
-  if(t.type==="expense")a.balance=num(a.balance)-n*s
-}
-
-function splitAmount(total,count){
-  const cents=Math.round(num(total)*100), base=Math.floor(cents/count), rem=cents-(base*count), arr=[];
-  for(let i=0;i<count;i++) arr.push((base+(i<rem?1:0))/100);
-  return arr;
-}
-
-function rebuildInstallmentsForTransaction(tx){
-  state.data.installments = state.data.installments.filter(i=>i.sourceTransactionId!==tx.id);
-  if(!(tx.type==="expense" && tx.paymentMethod==="credit")) return;
-  const count=Math.max(1,parseInt(tx.installmentCount||"1",10));
-  const parts=splitAmount(tx.amount,count);
-  for(let i=0;i<count;i++){
-    state.data.installments.push({
-      id:uid("inst"), cardId:tx.creditCardId||"", installmentNumber:i+1, amount:parts[i],
-      invoiceMonth:addMonths(tx.date||today(),i).slice(0,7), paid:false,
-      description:tx.description||"Compra na transação", sourceTransactionId:tx.id
-    });
+  if(id){
+    const idx=state.data.transactions.findIndex(t=>t.id===id);
+    if(idx!==-1) state.data.transactions[idx]=txData;
+  } else {
+    state.data.transactions.push(txData);
   }
+
+  saveData();
+  renderTransactions(state.data.transactions);
+  renderDashboard();
+  e.target.reset();
+  f.set("id","");
+  setTransactionType("income");
+  setTransactionPaymentMethod("cash");
+  toast("Transação salva!");
+  openView("dashboard");
 }
 
-function formatDateBR(iso){ if(!iso) return "-"; const d=new Date(`${iso}T00:00:00`); return d.toLocaleDateString("pt-BR"); }
-
-function renderDebtPanel(){
-  if(!$("debtInstallmentsCount")) return;
-  const openInst=state.data.installments.filter(i=>!i.paid);
-  const instAmount=openInst.reduce((s,i)=>s+num(i.amount),0);
-  const limitDate=addMonths(today(),1);
-  const recurringDue=state.data.recurring.filter(r=>r.isActive&&r.type==="expense"&&r.nextRunDate<=limitDate);
-  const recurringAmount=recurringDue.reduce((s,r)=>s+num(r.amount),0);
-  $("debtInstallmentsCount").textContent=String(openInst.length);
-  $("debtInstallmentsAmount").textContent=money(instAmount);
-  $("debtRecurringCount").textContent=String(recurringDue.length);
-  $("debtRecurringAmount").textContent=money(recurringAmount);
-  const cardById=(id)=>state.data.cards.find(c=>c.id===id);
-  const nextInst=openInst.slice().sort((a,b)=>a.invoiceMonth<b.invoiceMonth?-1:1).slice(0,5).map(i=>`<div class="list-item"><div><strong>Parcela ${i.installmentNumber} • ${cardById(i.cardId)?.name||"Cartão"}</strong><br><small>Fatura ${i.invoiceMonth} • ${money(i.amount)}</small></div></div>`);
-  const nextRec=recurringDue.slice().sort((a,b)=>a.nextRunDate<b.nextRunDate?-1:1).slice(0,5).map(r=>`<div class="list-item"><div><strong>${r.description||"Conta recorrente"}</strong><br><small>Vence em ${formatDateBR(r.nextRunDate)} • ${money(r.amount)}</small></div></div>`);
-  $("debtSummaryList").innerHTML=(nextInst.concat(nextRec)).join("")||"<small>Sem pendências.</small>";
+function renderTransactions(txs){
+  const list=$("transactionList"); if(!list) return;
+  list.innerHTML=txs.slice().sort((a,b)=>a.date<b.date?1:-1).map(t=>{
+    const c=cat(t.categoryId);
+    return `
+    <div class="list-item">
+      <div class="list-item-icon" style="background: ${c?.color}20; color: ${c?.color}"><i data-lucide="${c?.icon||'circle'}"></i></div>
+      <div style="flex:1"><strong>${t.description||'Sem descrição'}</strong><br><small>${t.date} • ${c?.name||'Sem categoria'}</small></div>
+      <div style="text-align:right; margin-right:1rem">
+        <strong style="color:${t.type==="income"?'var(--primary)':'var(--danger)'}">${t.type==="income"?'+':'-'}${money(t.amount)}</strong><br>
+        <small>${t.paymentMethod}</small>
+      </div>
+      <div class="list-actions">
+        <button class="btn btn-ghost" onclick="editTransaction('${t.id}')">Editar</button>
+        <button class="btn btn-danger" onclick="removeTransaction('${t.id}')">Excluir</button>
+      </div>
+    </div>
+  `}).join("")||"<p class='message'>Nenhuma transação encontrada.</p>";
+  if(window.lucide) lucide.createIcons();
 }
 
-function renderCategories(){ $("categoryList").innerHTML=state.data.categories.map(c=>`<div class="list-item"><div><strong>${c.name}</strong><br><small><span style="display:inline-block;width:12px;height:12px;border-radius:999px;background:${c.color}"></span> ${c.icon||"icone"}${c.budget ? ` • Teto: ${money(c.budget)}` : ""}</small></div><div class="actions"><button class="btn btn-ghost" onclick="editCategory('${c.id}')">Editar</button><button class="btn btn-danger" onclick="removeCategory('${c.id}')">Excluir</button></div></div>`).join("") }
-window.editCategory=(id)=>{const c=cat(id);if(!c)return;const f=$("categoryForm");f.id.value=c.id;f.name.value=c.name;f.color.value=c.color;f.icon.value=c.icon||"";if(f.budget)f.budget.value=c.budget||""}
-window.removeCategory=(id)=>{if(!confirm("Excluir categoria?"))return;state.data.categories=state.data.categories.filter(c=>c.id!==id);state.data.transactions.forEach(t=>{if(t.categoryId===id)t.categoryId=""});saveData();refreshSelects();renderCategories();renderTransactions(state.data.transactions);renderDashboard();toast("Categoria removida")}
-function saveCategory(e){e.preventDefault();const f=Object.fromEntries(new FormData(e.target));if(!f.name)return toast("Nome obrigatório",true);const budget=num(f.budget);if(f.id){const c=cat(f.id);if(c){c.name=f.name;c.color=f.color||"#3b82f6";c.icon=f.icon||"circle";c.budget=budget>0?budget:0}}else state.data.categories.push({id:uid("cat"),name:f.name,color:f.color||"#3b82f6",icon:f.icon||"circle",budget:budget>0?budget:0});e.target.reset();saveData();refreshSelects();renderCategories();renderDashboard();toast("Categoria salva")}
-
-function renderTransactions(items){
-  const list=items.slice().sort((a,b)=>a.date<b.date?1:-1).map(txVM);
-  const l=$("transactionList"); 
-  if(l) {
-    l.innerHTML=list.map(t=>{
-      const c = cat(t.categoryId);
-      return `<div class="list-item">
-        <div class="list-item-icon" style="background: ${c?.color || '#94a3b8'}20; color: ${c?.color || '#94a3b8'}">
-          <i data-lucide="${c?.icon || 'circle'}"></i>
-        </div>
-        <div style="flex: 1">
-          <strong>${t.description || (t.type === 'income' ? 'Entrada' : 'Saída')}</strong><br>
-          <small>${t.date} • ${t.categoryName}</small><br>
-          <small>${paymentLabel(t)}</small>
-        </div>
-        <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem;">
-          <strong style="color: ${t.type === 'income' ? 'var(--primary)' : 'var(--danger)'}">${t.type === 'income' ? '+' : '-'}${money(t.amount)}</strong>
-          <div class="actions">
-            <button class="btn btn-ghost" style="padding: 4px 8px; font-size: 0.7rem;" onclick="editTransaction('${t.id}')"><i data-lucide="edit-2" style="width: 12px;"></i></button>
-            <button class="btn btn-ghost" style="padding: 4px 8px; font-size: 0.7rem; color: var(--danger);" onclick="removeTransaction('${t.id}')"><i data-lucide="trash-2" style="width: 12px;"></i></button>
-          </div>
-        </div>
-      </div>`;
-    }).join("")||"<small>Nenhuma transação.</small>";
-    if(window.lucide) lucide.createIcons();
-  }
-}
-function paymentLabel(t){
-  if(t.type==="income") return t.paymentMethod==="freelance" ? "Freela" : "Entrada";
-  if(t.paymentMethod==="credit") return `Crédito${num(t.installmentCount)>1?` ${t.installmentCount}x`:""}`;
-  return t.paymentMethod==="pix" ? "PIX" : (t.paymentMethod==="debit" ? "Débito" : "Dinheiro");
-}
-window.editTransaction=(id)=>{
-  const t=state.data.transactions.find(x=>x.id===id);
-  if(!t)return;
+function editTransaction(id){
+  const t=state.data.transactions.find(x=>x.id===id); if(!t) return;
   openView("transactions");
   const f=$("transactionForm");
   f.id.value=t.id;
   setTransactionType(t.type);
+  setTransactionPaymentMethod(t.paymentMethod);
   f.amount.value=t.amount;
-  setTransactionPaymentMethod(t.paymentMethod||"cash");
-  f.categoryId.value=t.categoryId||"";
-  f.installmentCount.value=t.installmentCount||1;
+  f.categoryId.value=t.categoryId;
   f.date.value=t.date;
   f.description.value=t.description||"";
-  toggleTransactionPaymentFields();
-}
-window.removeTransaction=(id)=>{if(!confirm("Excluir transação?"))return;const t=state.data.transactions.find(x=>x.id===id);if(t){txEffect(t,true);state.data.installments=state.data.installments.filter(i=>i.sourceTransactionId!==t.id)}state.data.transactions=state.data.transactions.filter(x=>x.id!==id);saveData();renderTransactions(state.data.transactions);renderDashboard();toast("Transação removida")}
-function saveTransaction(e){
-  e.preventDefault(); const f=Object.fromEntries(new FormData(e.target)); const amount=num(f.amount);
-  if(!["income","expense"].includes(f.type)||amount<=0)return toast("Dados inválidos",true);
-  const pm=f.paymentMethod||"cash"; const ic=pm==="credit"?Math.max(1,parseInt(f.installmentCount||"1",10)):1;
-  let catId=f.categoryId||"";
-  if(f.type==="income") catId=getOrCreateCategoryByName(pm==="freelance"?"Freela":"Outras entradas");
-  if(f.id){
-    const t=state.data.transactions.find(x=>x.id===f.id); if(!t)return;
-    txEffect(t,true); Object.assign(t,{type:f.type,amount,paymentMethod:pm,installmentCount:ic,categoryId:catId,description:f.description||"",date:f.date||today()});
-    txEffect(t,false); rebuildInstallmentsForTransaction(t);
-  }else{
-    const t={id:uid("tx"),type:f.type,amount,paymentMethod:pm,installmentCount:ic,categoryId:catId,description:f.description||"",date:f.date||today()};
-    txEffect(t,false); rebuildInstallmentsForTransaction(t); state.data.transactions.push(t);
-  }
-  saveData(); e.target.reset(); if($("transactionForm")?.date) $("transactionForm").date.value=today();
-  setTransactionType("income"); setTransactionPaymentMethod("cash"); toggleTransactionPaymentFields();
-  renderTransactions(state.data.transactions); renderDashboard(); toast("Transação salva");
-}
-function filterTransactions(e){e.preventDefault();const f=Object.fromEntries(new FormData(e.target));let items=[...state.data.transactions];if(f.type)items=items.filter(t=>t.type===f.type);if(f.categoryId)items=items.filter(t=>t.categoryId===f.categoryId);if(f.startDate)items=items.filter(t=>t.date>=f.startDate);if(f.endDate)items=items.filter(t=>t.date<=f.endDate);renderTransactions(items)}
-
-function renderCards(){renderDebtPanel()}
-function addMonths(dateStr,n){const d=new Date(`${dateStr}T00:00:00`);const f=new Date(d.getFullYear(),d.getMonth()+n,Math.min(d.getDate(),28));return f.toISOString().slice(0,10)}
-function nextSalaryDate(day){const now=new Date(`${today()}T00:00:00`);let y=now.getFullYear(), m=now.getMonth(), d=Math.min(28,Math.max(1,parseInt(day||"5",10)));const c=new Date(y,m,d);return (now>c?new Date(y,m+1,d):c).toISOString().slice(0,10)}
-function renderSalaryForm(){
-  ensureSettings(); const s=state.data.settings.salary;
-  if($("salaryAmount")) $("salaryAmount").value = s.amount>0 ? s.amount : "";
-  if($("salaryDay")) $("salaryDay").value = s.day||5;
-  if($("salaryInfo")) $("salaryInfo").textContent = s.enabled ? `Ativo: ${money(s.amount)} todo dia ${s.day}.` : "Configure salário automático.";
-}
-function saveSalaryAuto(e){
-  e.preventDefault(); const f=Object.fromEntries(new FormData(e.target)); const amount=num(f.amount), day=Math.min(28,Math.max(1,parseInt(f.day||"5",10)));
-  if(amount<=0) return toast("Informe um salário válido.",true);
-  ensureSettings(); const salaryCategory=state.data.categories.find(c=>c.id==="cat_salary"||String(c.name).toLowerCase().includes("sal"));
-  let rec=state.data.recurring.find(r=>r.id===state.data.settings.salary?.recurringId);
-  if(!rec){
-    rec={id:uid("rec"),type:"income",amount,frequency:"monthly",nextRunDate:nextSalaryDate(day),categoryId:salaryCategory?.id||"",description:"Salário mensal",isActive:true,systemTag:"salary_auto"};
-    state.data.recurring.push(rec);
-  }else{
-    Object.assign(rec,{amount,nextRunDate:nextSalaryDate(day),categoryId:salaryCategory?.id||rec.categoryId||""});
-  }
-  state.data.settings.salary={enabled:true,amount,day,recurringId:rec.id};
-  saveData(); renderSalaryForm(); renderRecurring(); toast("Salário automático salvo.");
-}
-window.markInstallmentPaid=(id)=>{const i=state.data.installments.find(x=>x.id===id);if(!i)return;i.paid=true;saveData();renderCards();renderInvoices();renderDashboard();toast("Parcela paga")}
-function renderInvoices(e){if(e)e.preventDefault();const f=new FormData($("invoiceFilter"));const m=f.get("month");const list=state.data.installments.filter(i=>(!m||i.invoiceMonth===m));const g={};list.forEach(i=>{g[i.invoiceMonth]??={month:i.invoiceMonth,total:0,items:[]};g[i.invoiceMonth].total+=num(i.amount);g[i.invoiceMonth].items.push(i)});const rows=Object.values(g).sort((a,b)=>a.month<b.month?1:-1);$("invoiceList").innerHTML=rows.map(r=>`<div class="list-item"><div><strong>${r.month}</strong><br><small>Total: ${money(r.total)}</small>${r.items.map(i=>`<div><small>${i.installmentNumber}a parcela - ${money(i.amount)} ${i.paid?"(paga)":`<button class='btn btn-ghost' onclick="markInstallmentPaid('${i.id}')">Pagar</button>`}</small></div>`).join("")}</div></div>`).join("")||"<small>Sem parcelas.</small>"}
-function nextDate(dateStr,f){const d=new Date(`${dateStr}T00:00:00`);if(f==="daily")d.setDate(d.getDate()+1);if(f==="weekly")d.setDate(d.getDate()+7);if(f==="monthly")d.setMonth(d.getMonth()+1);return d.toISOString().slice(0,10)}
-function saveRecurring(e){e.preventDefault();const f=Object.fromEntries(new FormData(e.target));const amount=num(f.amount);if(!["income","expense"].includes(f.type)||amount<=0)return toast("Recorrência inválida",true);if(f.id){const r=state.data.recurring.find(x=>x.id===f.id);if(r)Object.assign(r,{...f,amount})}else state.data.recurring.push({id:uid("rec"),type:f.type,amount,frequency:f.frequency||"monthly",nextRunDate:f.nextRunDate||today(),categoryId:f.categoryId||"",description:f.description||"",isActive:true});saveData();e.target.reset();renderRecurring();toast("Recorrência salva")}
-window.removeRecurring=(id)=>{if(!confirm("Excluir recorrente?"))return;state.data.recurring=state.data.recurring.filter(r=>r.id!==id);saveData();renderRecurring();renderDashboard();toast("Recorrente removido")}
-function runRecurringDue(silent=false){const t=today();let p=0;state.data.recurring.forEach(r=>{if(!r.isActive)return;while(r.nextRunDate<=t){const tx={id:uid("tx"),type:r.type,amount:num(r.amount),categoryId:r.categoryId||"",description:`[Recorrente] ${r.description||""}`.trim(),date:r.nextRunDate};txEffect(tx,false);state.data.transactions.push(tx);r.nextRunDate=nextDate(r.nextRunDate,r.frequency);p++}});if(p){saveData();renderRecurring();renderTransactions(state.data.transactions);renderDashboard();if(!silent)toast(`Processados ${p} lançamentos`)}}
-function renderRecurring(){ $("recurringList").innerHTML=state.data.recurring.map(r=>`<div class="list-item"><div><strong>${r.type==="income"?"Entrada":"Saída"} ${money(r.amount)}</strong><br><small>${r.frequency} • próxima: ${r.nextRunDate}</small><br><small>${r.description||"-"}</small></div><div class="actions"><button class="btn btn-danger" onclick="removeRecurring('${r.id}')">Excluir</button></div></div>`).join("");renderDebtPanel() }
-
-function saveGoal(e){e.preventDefault();const f=Object.fromEntries(new FormData(e.target));const target=num(f.targetAmount),current=num(f.currentAmount),dv=Math.max(1,parseInt(f.durationValue||"1",10)),du=f.durationUnit||"months";if(target<=0||current<0)return toast("Meta inválida",true);if(f.id){const g=state.data.goals.find(x=>x.id===f.id);if(g)Object.assign(g,{targetAmount:target,currentAmount:current,durationValue:dv,durationUnit:du})}else state.data.goals.push({id:uid("goal"),name:"Meta financeira",targetAmount:target,currentAmount:current,durationValue:dv,durationUnit:du});saveData();e.target.reset();renderGoals();renderDashboard();toast("Meta salva")}
-window.contributeGoal=(id)=>{const g=state.data.goals.find(x=>x.id===id);if(!g)return;const v=num(prompt("Valor do aporte:"));if(v<=0)return;g.currentAmount=num(g.currentAmount)+v;saveData();renderGoals();renderDashboard();toast("Aporte registrado")}
-window.removeGoal=(id)=>{if(!confirm("Excluir meta?"))return;state.data.goals=state.data.goals.filter(g=>g.id!==id);saveData();renderGoals();renderDashboard();toast("Meta removida")}
-function renderGoals(){
-  if(!state.data.goals.length){ $("goalList").innerHTML="<small>Nenhuma meta.</small>"; return; }
-  $("goalList").innerHTML=state.data.goals.map(g=>{
-    const p=g.targetAmount>0?Math.min(100,(num(g.currentAmount)/num(g.targetAmount))*100):0;
-    const rem=Math.max(0,num(g.targetAmount)-num(g.currentAmount));
-    const months=(g.durationUnit==="years"?num(g.durationValue)*12:num(g.durationValue))||1;
-    return `<div class="goal-item">
-      <strong>${g.name||"Meta"}</strong><br><small>Alvo: ${money(g.targetAmount)} • Atual: ${money(g.currentAmount)}</small>
-      <div class="progress goal-progress"><div style="width:${p}%"></div></div>
-      <div class="actions"><button class="btn btn-secondary" onclick="contributeGoal('${g.id}')">Aportar</button><button class="btn btn-danger" onclick="removeGoal('${g.id}')">Excluir</button></div>
-    </div>`;
-  }).join("");
+  if(t.paymentMethod==="credit") f.installmentCount.value=t.installmentCount;
 }
 
-function draw(k,id,type,data){
-  if(state.charts[k]) state.charts[k].destroy();
-  const text=getComputedStyle(document.body).getPropertyValue("--text").trim();
-  const border=getComputedStyle(document.body).getPropertyValue("--border").trim();
-  state.charts[k]=new Chart($(id),{
-    type, data, options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{labels:{color:text}}},
-      scales:type==="line"?{x:{ticks:{color:text},grid:{color:border}},y:{ticks:{color:text},grid:{color:border}}}:undefined
+function removeTransaction(id){
+  if(!confirm("Excluir transação?")) return;
+  state.data.transactions=state.data.transactions.filter(t=>t.id!==id);
+  saveData(); renderTransactions(state.data.transactions); renderDashboard();
+}
+
+function filterTransactions(e){
+  e.preventDefault();
+  const f=new FormData(e.target);
+  const catId=f.get("categoryId"), start=f.get("startDate"), end=f.get("endDate");
+  let filtered=state.data.transactions;
+  if(catId) filtered=filtered.filter(t=>t.categoryId===catId);
+  if(start) filtered=filtered.filter(t=>t.date>=start);
+  if(end) filtered=filtered.filter(t=>t.date<=end);
+  renderTransactions(filtered);
+}
+
+function clearTransactionFilters(){
+  $("transactionFilter").reset();
+  renderTransactions(state.data.transactions);
+}
+
+function renderCards(){
+  const txs=state.data.transactions;
+  const creditTxs=txs.filter(t=>t.paymentMethod==="credit");
+  
+  // Parcelas restantes (simplificado: todas as que não foram pagas no mês atual ou futuro)
+  const totalAmount=creditTxs.reduce((s,t)=>s+num(t.amount),0);
+  if($("debtInstallmentsCount")) $("debtInstallmentsCount").textContent=String(creditTxs.length);
+  if($("debtInstallmentsAmount")) $("debtInstallmentsAmount").textContent=money(totalAmount);
+  
+  const recurringCount=state.data.recurring.filter(r=>r.isActive).length;
+  const recurringAmount=state.data.recurring.filter(r=>r.isActive).reduce((s,r)=>s+num(r.amount),0);
+  if($("debtRecurringCount")) $("debtRecurringCount").textContent=String(recurringCount);
+  if($("debtRecurringAmount")) $("debtRecurringAmount").textContent=money(recurringAmount);
+}
+
+function renderInvoices(e){
+  if(e) e.preventDefault();
+  const m = e ? new FormData(e.target).get("month") : month();
+  const txs = state.data.transactions.filter(t => t.paymentMethod === "credit" && t.date.slice(0, 7) === m);
+  const list = $("invoiceList"); if(!list) return;
+  list.innerHTML = txs.map(t => `
+    <div class="list-item">
+      <div style="flex:1"><strong>${t.description}</strong><br><small>${t.date}</small></div>
+      <strong>${money(t.amount)}</strong>
+    </div>
+  `).join("") || "<p class='message'>Nenhuma fatura para este mês.</p>";
+}
+
+function saveRecurring(e){
+  e.preventDefault();
+  const f=new FormData(e.target);
+  const rData={
+    id:uid("rec"),
+    type:f.get("type"),
+    amount:num(f.get("amount")),
+    frequency:f.get("frequency"),
+    nextRunDate:f.get("nextRunDate"),
+    categoryId:f.get("categoryId"),
+    description:f.get("description"),
+    isActive:true
+  };
+  state.data.recurring.push(rData);
+  saveData(); renderRecurring(); e.target.reset();
+}
+
+function renderRecurring(){
+  const list=$("recurringList"); if(!list) return;
+  list.innerHTML=state.data.recurring.map(r=>`
+    <div class="list-item">
+      <div style="flex:1"><strong>${r.description}</strong><br><small>${r.frequency} • Próximo: ${r.nextRunDate}</small></div>
+      <div style="text-align:right; margin-right:1rem"><strong>${money(r.amount)}</strong></div>
+      <button class="btn btn-danger" onclick="removeRecurring('${r.id}')">Excluir</button>
+    </div>
+  `).join("")||"<p class='message'>Nenhum lançamento recorrente.</p>";
+}
+
+function removeRecurring(id){
+  state.data.recurring=state.data.recurring.filter(r=>r.id!==id);
+  saveData(); renderRecurring();
+}
+
+function runRecurringDue(silent=false){
+  let count=0;
+  state.data.recurring.forEach(r=>{
+    while(r.isActive && r.nextRunDate <= today()){
+      state.data.transactions.push({
+        id:uid("tx"),
+        type:r.type,
+        amount:r.amount,
+        categoryId:r.categoryId,
+        date:r.nextRunDate,
+        description:r.description + " (Recorrente)",
+        paymentMethod:"cash",
+        installmentCount:1
+      });
+      const d=new Date(r.nextRunDate+"T12:00:00");
+      if(r.frequency==="daily") d.setDate(d.getDate()+1);
+      else if(r.frequency==="weekly") d.setDate(d.getDate()+7);
+      else if(r.frequency==="monthly") d.setMonth(d.getMonth()+1);
+      r.nextRunDate=d.toISOString().slice(0,10);
+      count++;
     }
   });
+  if(count>0){
+    saveData(); renderTransactions(state.data.transactions); renderDashboard();
+    if(!silent) toast(`${count} lançamentos recorrentes processados!`);
+  } else if(!silent) {
+    toast("Nada para processar hoje.");
+  }
 }
 
-async function handleAiInput(text) {
-  if (!text || !text.trim()) return;
-  const input = text.trim().toLowerCase();
+function saveGoal(e){
+  e.preventDefault();
+  const f=new FormData(e.target);
+  const id=f.get("id");
+  const gData={
+    id:id||uid("goal"),
+    targetAmount:num(f.get("targetAmount")),
+    currentAmount:num(f.get("currentAmount")),
+    durationValue:num(f.get("durationValue")),
+    durationUnit:f.get("durationUnit"),
+    date:today()
+  };
+  if(id){
+    const idx=state.data.goals.findIndex(g=>g.id===id);
+    if(idx!==-1) state.data.goals[idx]=gData;
+  } else {
+    state.data.goals.push(gData);
+  }
+  saveData(); renderGoals(); e.target.reset(); f.set("id","");
+}
+
+function renderGoals(){
+  const list=$("goalList"); if(!list) return;
+  list.innerHTML=state.data.goals.map(g=>{
+    const pct=Math.min(100,(g.currentAmount/g.targetAmount)*100);
+    const remaining=g.targetAmount-g.currentAmount;
+    const monthly=remaining/g.durationValue;
+    return `
+    <div class="card">
+      <div style="display:flex; justify-content:space-between">
+        <strong>Meta: ${money(g.targetAmount)}</strong>
+        <button class="btn btn-danger" onclick="removeGoal('${g.id}')">Excluir</button>
+      </div>
+      <p>Já poupado: ${money(g.currentAmount)} (${pct.toFixed(1)}%)</p>
+      <div class="progress" style="height:12px"><div class="progress-bar" style="width:${pct}%; background:var(--primary)"></div></div>
+      <p><small>Faltam ${money(remaining)}. Guarde <strong>${money(monthly)}/${g.durationUnit==="months"?'mês':'ano'}</strong> por ${g.durationValue} ${g.durationUnit==="months"?'meses':'anos'}.</small></p>
+      <button class="btn btn-secondary" onclick="contributeGoal('${g.id}')">Adicionar aporte</button>
+    </div>
+  `}).join("")||"<p class='message'>Nenhuma meta cadastrada.</p>";
+}
+
+function removeGoal(id){
+  state.data.goals=state.data.goals.filter(g=>g.id!==id);
+  saveData(); renderGoals();
+}
+
+function contributeGoal(id){
+  const amount=num(prompt("Valor do aporte:"));
+  if(!amount) return;
+  const g=state.data.goals.find(x=>x.id===id);
+  if(g){
+    g.currentAmount += amount;
+    saveData(); renderGoals();
+  }
+}
+
+function toggleTheme(){
+  const isDark=document.body.classList.toggle("dark");
+  localStorage.setItem(KEYS.theme,isDark?"dark":"light");
+  renderSettings();
+}
+
+function renderSettings(){
+  const themeInfo=$("settingsThemeInfo");
+  if(themeInfo) themeInfo.textContent="Tema atual: "+(document.body.classList.contains("dark")?"Escuro":"Claro");
+}
+
+function saveSalaryAuto(e){
+  e.preventDefault();
+  const f=new FormData(e.target);
+  const amount=num(f.get("amount")), day=num(f.get("day"));
+  state.data.settings.salary={enabled:true,amount,day};
   
-  const amountMatch = input.match(/(\d+[.,]\d+|\d+)/);
-  if (!amountMatch) {
-    toast("Não encontrei um valor. Ex: '20 gasolina'", true);
-    return;
+  // Criar ou atualizar recorrência de salário
+  const existingRec=state.data.recurring.find(r=>r.description==="Salário Automático");
+  const nextDate=new Date(); 
+  nextDate.setDate(day);
+  if(nextDate < new Date()) nextDate.setMonth(nextDate.getMonth()+1);
+
+  const recData={
+    id:existingRec?.id||uid("rec"),
+    type:"income",
+    amount,
+    frequency:"monthly",
+    nextRunDate:nextDate.toISOString().slice(0,10),
+    categoryId:"cat_salary",
+    description:"Salário Automático",
+    isActive:true
+  };
+
+  if(existingRec){
+    const idx=state.data.recurring.indexOf(existingRec);
+    state.data.recurring[idx]=recData;
+  } else {
+    state.data.recurring.push(recData);
   }
 
-  const amount = parseFloat(amountMatch[0].replace(",", "."));
-  let description = input.replace(amountMatch[0], "").replace("r$", "").trim();
+  saveData();
+  toast("Configuração de salário salva!");
+  renderSalaryForm();
+  renderRecurring();
+}
+
+function renderSalaryForm(){
+  const s=state.data.settings.salary;
+  if(!s || !s.enabled) return;
+  if($("salaryAmount")) $("salaryAmount").value=s.amount;
+  if($("salaryDay")) $("salaryDay").value=s.day;
+  if($("salaryInfo")) $("salaryInfo").textContent=`Configurado: ${money(s.amount)} todo dia ${s.day}.`;
+}
+
+function exportBackupJson(){
+  const data=JSON.stringify(state.data);
+  const blob=new Blob([data],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=`granaflow-backup-${today()}.json`;
+  a.click();
+}
+
+function importBackupJson(e){
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=(ev)=>{
+    const data=safeParseData(ev.target.result);
+    if(data){
+      state.data=data;
+      saveData();
+      boot();
+      toast("Backup importado!");
+    } else {
+      toast("Arquivo inválido.",true);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function clearAllData(){
+  if(!confirm("Isso apagará todas as suas transações e metas. Continuar?")) return;
+  state.data=emptyData();
+  saveData();
+  boot();
+  toast("Dados limpos.");
+}
+
+function setLoadingUI(on){
+  document.body.classList.toggle("loading-ui",on);
+}
+
+function animateValue(el,val,opts={}){
+  if(!el)return;
+  const start=num(el.dataset.val||0), end=num(val);
+  const duration=400, startTime=performance.now();
+  function step(now){
+    const progress=Math.min(1,(now-startTime)/duration);
+    const current=start+(end-start)*progress;
+    el.textContent=opts.currency?money(current):Math.floor(current);
+    if(progress<1) requestAnimationFrame(step); else el.dataset.val=end;
+  }
+  requestAnimationFrame(step);
+}
+
+function animateView(view){
+  view.style.opacity="0";
+  view.style.transform="translateY(10px)";
+  setTimeout(()=>{
+    view.style.transition="all 0.3s ease";
+    view.style.opacity="1";
+    view.style.transform="translateY(0)";
+  },50);
+}
+
+const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
+
+function quickAddExpense(){
+  openView("transactions");
+  setTransactionType("expense");
+  setTimeout(()=>{$("txAmount")?.focus()},300);
+}
+
+// IA Helper
+async function handleAiInput(val){
+  if(!val || val.trim().length < 2) return;
+  const input = val.toLowerCase().trim();
   
-  if (amount > 0) {
-    const keywords = {
-      cat_food: ["comida", "almoço", "janta", "ifood", "mercado", "lanche", "restaurante", "pizza", "burger", "café", "padaria", "supermercado", "açougue", "feira"],
-      cat_trans: ["gasolina", "uber", "onibus", "combustivel", "gasosa", "estacionamento", "pedagio", "99pop", "metro", "trem", "passagem", "oficina", "pneu", "mecanico"],
-      cat_home: ["aluguel", "luz", "agua", "internet", "condominio", "reforma", "moveis", "limpeza", "iptu", "energia", "telefone", "gas"],
-      cat_fun: ["cinema", "show", "bar", "cerveja", "festa", "viagem", "streaming", "netflix", "spotify", "jogos", "ps5", "xbox", "balada", "teatro", "clube"],
-      cat_salary: ["salario", "recebi", "pagamento", "bonus", "pix recebido", "pro labore", "renda", "freela", "freelance", "venda"],
-      cat_health: ["farmacia", "drogaria", "remedio", "hospital", "medico", "consulta", "exame", "dentista", "saude", "convenio", "plano de saude", "psicologo"],
-      cat_invest: ["investimento", "bolsa", "acoes", "tesouro", "cripto", "bitcoin", "poupanca", "fii", "cdb", "aplicacao"],
-      cat_work: ["trabalho", "ferramenta", "software", "assinatura", "mei", "imposto", "escritorio", "papelaria"],
-      cat_edu: ["escola", "faculdade", "curso", "livro", "mensalidade", "estudo", "pos", "treinamento", "udemy", "alura"],
-      cat_tip: ["gorjeta", "caixinha", "extra", "doacao", "presente", "mimo"]
-    };
-
-    let categoryId = "";
+  // Regex simples: "valor descrição" ou "descrição valor"
+  const amountMatch = input.match(/(\d+([.,]\d{1,2})?)/);
+  if(amountMatch){
+    const amount = num(amountMatch[0].replace(",", "."));
+    const description = input.replace(amountMatch[0], "").trim();
+    
     let type = "expense";
+    let categoryId = "cat_others";
+    
+    // IA Básica: Aprender com o histórico
+    if(state.aiLearning && state.aiLearning[description]){
+      categoryId = state.aiLearning[description];
+    } else {
+      // Sugerir categoria por palavras-chave
+      const keywords = {
+        food: ["comida", "almoço", "janta", "ifood", "mercado", "pão", "lanche"],
+        trans: ["uber", "gasolina", "ônibus", "metro", "combustível"],
+        fun: ["cinema", "cerveja", "festa", "show", "netflix", "spotify"],
+        home: ["aluguel", "luz", "água", "internet", "condomínio"],
+        salary: ["salário", "pagamento", "recebi"]
+      };
 
-    // 1. Verificar aprendizado dinâmico (prioridade)
-     if (state.aiLearning && state.aiLearning[description]) {
-       categoryId = state.aiLearning[description];
-       const c = cat(categoryId);
-       if (categoryId === "cat_salary" || (c && c.name.toLowerCase().includes("freela"))) type = "income";
-     }
- 
-     // 2. Verificar palavras-chave no dicionário
-     if (!categoryId) {
-       for (const [catId, words] of Object.entries(keywords)) {
-         if (words.some(word => description.includes(word))) {
-           categoryId = state.data.categories.find(c => c.id === catId)?.id || "";
-           if (catId === "cat_salary" || description.includes("freela") || description.includes("freelance")) type = "income";
-           break;
-         }
-       }
-     }
-
-    // 3. Verificar metas (Ex: "100 meta")
-    if (!categoryId && (description.includes("meta") || description.includes("objetivo"))) {
-      if (state.data.goals.length > 0) {
-        const goal = state.data.goals[0];
-        goal.currentAmount = num(goal.currentAmount) + amount;
-        saveData();
-        renderGoals();
-        renderDashboard();
-        toast(`IA: Aporte de ${money(amount)} na meta "${goal.name}"`);
-        if ($("aiQuickInput")) $("aiQuickInput").value = "";
-        return;
-      }
-    }
-
-    // 4. Se não reconheceu nada, tentar buscar por nome de categoria customizada
-    if (!categoryId && description) {
-      const customCat = state.data.categories.find(c => 
-        description.includes(c.name.toLowerCase()) || 
-        c.name.toLowerCase().includes(description)
-      );
-      if (customCat) categoryId = customCat.id;
-    }
-
-    // 5. Se ainda não reconheceu nada, perguntar ao usuário ou usar fallback
-    if (!categoryId) {
-      // Se não houver descrição útil (apenas caracteres aleatórios ou vazio), perguntar
-      if (!description || description.length < 2) {
-        const descInput = prompt("IA: Detectei o valor, mas o que você comprou?");
-        if (!descInput) {
-          toast("Operação cancelada.", true);
-          return; 
-        }
-        description = descInput.toLowerCase().trim();
-      }
-
-      // Tentar re-mapear com a descrição (seja a original ou a nova do prompt)
-      for (const [catId, words] of Object.entries(keywords)) {
-        if (words.some(word => description.includes(word))) {
-          categoryId = state.data.categories.find(c => c.id === catId)?.id || "";
-          if (catId === "cat_salary") type = "income";
-          break;
+      for(const [catKey, words] of Object.entries(keywords)){
+        if(words.some(w => description.includes(w))){
+          const found = state.data.categories.find(c => c.id.includes(catKey));
+          if(found) {
+            categoryId = found.id;
+            if(catKey === "salary") type = "income";
+            break;
+          }
         }
       }
 
-      // Se após tudo isso ainda não tem categoria, perguntar explicitamente
-      if (!categoryId) {
+      // Se não encontrou, perguntar ao usuário e aprender
+      if(categoryId === "cat_others"){
         const categories = state.data.categories;
-        const optionsText = categories.map((c, i) => `${i + 1}. ${c.name}`).join("\n");
-        const userChoice = prompt(`IA: Não reconheci "${description}".\nEm qual categoria isso se encaixa?\nDigite o número:\n\n${optionsText}`);
+        const catOptions = categories.map((c, i) => `${i+1}. ${c.name}`).join("\n");
+        const userChoice = prompt(`IA: Não reconheci a categoria para "${description}".\nEscolha o número:\n${catOptions}`);
         
         const idx = parseInt(userChoice) - 1;
         if (categories[idx]) {
@@ -1164,13 +1042,22 @@ function exportPdf(){window.print()}
 
 function renderInsights(){
   const tx=state.data.transactions; const currM=month(); const r=monthly(currM);
-  const insightText=r.expense>r.income*0.85 ? "Gastos altos! Cuidado." : "Finanças saudáveis.";
-  const l=$("insightsList"); if(l) l.innerHTML=`<div class="list-item">${insightText}</div>`;
+  const insightText=r.expense>r.income*0.85 ? "Gastos altos! Você comprometeu mais de 85% da sua renda este mês." : "Suas finanças estão saudáveis. Continue assim!";
+  
+  const l=$("insightsList"); if(l) l.innerHTML=`<div class="list-item"><i data-lucide="sparkles"></i> <span>${insightText}</span></div>`;
+  
+  const trend=$("insightTrendList"); if(trend) trend.innerHTML="<small>Análise de tendência em desenvolvimento...</small>";
+  const growth=$("insightTopGrowthList"); if(growth) growth.innerHTML="<small>Identificando categorias em alta...</small>";
+  const notify=$("notificationList"); if(notify) notify.innerHTML="<small>Sem novas notificações.</small>";
+  
+  if(window.lucide) lucide.createIcons();
 }
 
 function registerServiceWorker(){
   if(!("serviceWorker" in navigator)) return;
-  window.addEventListener("load",()=>navigator.serviceWorker.register("./frontend/service-worker.js").catch(e=>console.error("SW erro:",e)));
+  const register = () => navigator.serviceWorker.register("./service-worker.js").catch(e=>console.error("SW erro:",e));
+  if (document.readyState === "complete") register();
+  else window.addEventListener("load", register);
 }
 
 async function boot(){
@@ -1251,6 +1138,7 @@ async function initApp(){
         state.user = null;
         state.data = null;
         renderAuth();
+        setLoadingUI(false);
       }
     });
 
